@@ -122,6 +122,9 @@ for row_idx, layout_row in enumerate(layout_grid):
         panel['LED_mapping_3_flat'] = ordered
 
 # Output final panel maps
+final_gpio_output = {}
 for row in layout_grid:
     for panel in row:
+        final_gpio_output[panel['gpio']] = panel['LED_mapping_3_flat']
         print(f"GPIO {panel['gpio']}: {panel['LED_mapping_3_flat']}")
+print(final_gpio_output)
