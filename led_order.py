@@ -82,8 +82,7 @@ total_rows = get_total_rows(layout_grid)
 # Generate full matrix of global LED indices
 led_matrix = [[c + r * total_cols for c in range(total_cols)] for r in range(total_rows)]
 offsets = calculate_offsets(layout_grid, panel_mapping)
-stiched_rows = []
-leds_so_far = 0
+stitched_rows = []
 
 for row_idx, layout_row in enumerate(layout_grid):
     current_rows = get_dims_from_key(layout_row[0]['layout'])[1]
@@ -102,14 +101,14 @@ for row_idx, layout_row in enumerate(layout_grid):
         row = []
         for matrix in panel_matrices:
             row.extend(matrix[r])
-        stiched_rows.append(row)
+        stitched_rows.append(row)
 
 # Re-map to global layout
 for row_idx, layout_row in enumerate(layout_grid):
     for panel_idx, panel in enumerate(layout_row):
         mapping_2 = []
         for r, row in enumerate(panel['LED_mapping_1']):
-            new_row = [find_value_in_array1_for_value_in_array2(val, led_matrix, stiched_rows) for val in row]
+            new_row = [find_value_in_array1_for_value_in_array2(val, led_matrix, stitched_rows) for val in row]
             mapping_2.append(new_row)
 
         panel['LED_mapping_2'] = mapping_2
