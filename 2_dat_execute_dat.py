@@ -10,35 +10,58 @@
 #
 # If rows or columns are deleted, sizeChange will be called instead of row/col/cellChange.
 
+import struct  # Only needed for byte-packing
+
+
 layout_grid = [
-	[{'gpio': 2, 'layout': '2x1'}],
-	[{'gpio': 3, 'layout': '2x2'}],
+	[{'gpio': 2, 'layout': '20x10'}, {'gpio': 3, 'layout': '20x10'}, {'gpio': 4, 'layout': '20x10'}, {'gpio': 5, 'layout': '20x10'}, {'gpio': 6, 'layout': '20x10'}],
+	[{'gpio': 7, 'layout': '20x10'}, {'gpio': 8, 'layout': '20x10'}, {'gpio': 9, 'layout': '20x10'}, {'gpio': 10, 'layout': '20x10'}, {'gpio': 11, 'layout': '20x10'}],
 #	 [{'gpio': 1, 'layout': '2x3'}, {'gpio': 2, 'layout': '4x3'}],
 #	 [{'gpio': 3, 'layout': '4x2'}, {'gpio': 4, 'layout': '2x2'}],
 ]
 
 panel_mapping = {
-	'2x1':  [ 0,  1],
-	'2x2':  [ 0,  1,
-			  3,  2],
-	'2x3':  [ 0,  1,
-			  3,  2,
-			  4,  5],
-	'4x2':  [ 0,  7,  1,  6,
-			  4,  3,  5,  2],
-	'4x3':  [ 0, 11,  1, 10,
-			  8,  3,  9,  2,
-			  4,  7,  5,  6],
-	'5x5':  [ 0, 24,  1, 23,  2,
-			 20,  4, 21,  3, 22,
-			  5, 19,  6, 18,  7,
-			 15,  9, 16,  8, 17,
-			 10, 14, 11, 13, 12],
-	'10x5': [ 0, 49,  1, 48,  2, 47,  3, 46,  4, 45,
-			 40,  9, 41,  8, 42,  7, 43,  6, 44,  5,
-			 10, 39, 11, 38, 12, 37, 13, 36, 14, 35,
-			 30, 19, 31, 18, 32, 17, 33, 16, 34, 15,
-			 20, 29, 21, 28, 22, 27, 23, 26, 24, 25],
+	'2x1':  [   0,   1],
+	'2x2':  [   0,   1,
+			    3,   2],
+	'2x3':  [   0,   1,
+			    3,   2,
+			    4,   5],
+	'4x2':  [   0,   7,   1,   6,
+			    4,   3,   5,   2],
+	'4x3':  [   0,  11,   1,  10,
+			    8,   3,   9,   2,
+			    4,   7,   5,   6],
+	'5x5':  [   0,  24,   1,  23,   2,
+			   20,   4,  21,   3,  22,
+			    5,  19,   6,  18,   7,
+			   15,   9,  16,   8,  17,
+			   10,  14,  11,  13,  12],
+	'10x5': [   0,  49,   1,  48,   2,  47,   3,  46,   4,  45,
+			   40,   9,  41,   8,  42,   7,  43,   6,  44,   5,
+			   10,  39,  11,  38,  12,  37,  13,  36,  14,  35,
+			   30,  19,  31,  18,  32,  17,  33,  16,  34,  15,
+			   20,  29,  21,  28,  22,  27,  23,  26,  24,  25],
+	'20x10': [  0, 199,   1, 198,   2, 197,   3, 196,   4, 195,
+			  190,   9, 191,   8, 192,   7, 193,   6, 194,   5,
+			   10, 189,  11, 188,  12, 187,  13, 186,  14, 185,
+			  180,  19, 181,  18, 182,  17, 183,  16, 184,  15,
+			   20, 179,  21, 178,  22, 177,  23, 176,  24, 175,
+			  170,  29, 171,  28, 172,  27, 173,  26, 174,  25,
+			   30, 169,  31, 168,  32, 167,  33, 166,  34, 165,
+			  160,  39, 161,  38, 162,  37, 163,  36, 164,  35,
+			   40, 159,  41, 158,  42, 157,  43, 156,  44, 155,
+			  150,  49, 151,  48, 152,  47, 153,  46, 154,  45,
+			   50, 149,  51, 148,  52, 147,  53, 146,  54, 145,
+			  140,  59, 141,  58, 142,  57, 143,  56, 144,  55,
+			   60, 139,  61, 138,  62, 137,  63, 136,  64, 135,
+			  130,  69, 131,  68, 132,  67, 133,  66, 134,  65,
+			   70, 129,  71, 128,  72, 127,  73, 126,  74, 125,
+			  120,  79, 121,  78, 122,  77, 123,  76, 124,  75,
+			   80, 119,  81, 118,  82, 117,  83, 116,  84, 115,
+			  110,  89, 111,  88, 112,  87, 113,  86, 114,  85,
+			   90, 109,  91, 108,  92, 107,  93, 106,  94, 105,
+			  100,  99, 101,  98, 102,  97, 103,  96, 104,  95],
 }
 
 final_gpio_output = {}
@@ -173,12 +196,9 @@ def colChange(dat, cols):
 
 def cellChange(dat, cells, prev):
 	global final_gpio_output
-	#op('text1').write(final_gpio_output)
-	# debug with
-	# $ nc -ul 7000
 
 	# Step 1: Flatten DAT into RGB rows
-	raw_rgb_rows = [ [cell.val for cell in row] for row in dat.rows() ]
+	raw_rgb_rows = [[cell.val for cell in row] for row in dat.rows()]
 
 	# Step 2: Assign global LED index to RGB rows
 	global_rgb_map = {}
@@ -189,22 +209,23 @@ def cellChange(dat, cells, prev):
 				global_rgb_map[global_index] = raw_rgb_rows[offset + i]
 		offset += len(indices)
 
-	# Step 3: Compose message per GPIO
-	messages = []
+	# Step 3: Send one binary packet per GPIO
 	for gpio, global_indices in final_gpio_output.items():
-		gpio_rows = []
+		byte_array = bytearray()
 		for global_index in global_indices:
 			rgb = global_rgb_map.get(global_index, ['0', '0', '0'])
-			gpio_rows.append(';'.join(rgb))
-		msg = f"{gpio}:" + '|'.join(gpio_rows)
-		messages.append(msg)
+			r, g, b = (int(x) for x in rgb)
+			byte_array += struct.pack('BBB', r, g, b)  # 3 bytes per LED
 
-	# Step 4: Final message with newlines
-	final_msg = '#'.join(messages)
+		# Optional: prepend GPIO pin as 1 byte or 2 bytes if needed
+		# byte_array = struct.pack('B', gpio) + byte_array  # Uncomment to add GPIO as header
 
-	# Output
-	op('text1').write(final_msg)
-	op('udpout1').send(final_msg)
+		if len(byte_array) > 1450:
+			op('text1').write(f"⚠️ GPIO {gpio} packet too large: {len(byte_array)} bytes")
+		else:
+			#op('text1').write(byte_array)
+			op('udpout1').sendBytes(byte_array)
+
 
 
 def sizeChange(dat):
