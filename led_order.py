@@ -1,4 +1,53 @@
-# Panel mapping: physical wiring order (0-based LED numbers)
+# Utility functions
+
+def flatten(matrix):
+    return [item for row in matrix for item in row]
+
+def reshape_mapping(mapping, cols, offset=0):
+    mapping = [val + offset for val in mapping]
+    return [mapping[r * cols:(r + 1) * cols] for r in range(len(mapping) // cols)]
+
+def get_panel_info(panel, panel_mapping, panel_dims):
+    layout = panel['layout']
+    return layout, panel_mapping[layout], panel_dims[layout]
+
+def calculate_offsets(layout_grid, panel_mapping):
+    offset = 0
+    offsets = []
+    for row in layout_grid:
+        row_offsets = []
+        for panel in row:
+            row_offsets.append(offset)
+            offset += len(panel_mapping[panel['layout']])
+        offsets.append(row_offsets)
+    return offsets
+
+def find_value_in_array1_for_value_in_array2(value, array1, array2):
+    for row_index, row in enumerate(array2):
+        for col_index, element in enumerate(row):
+            if element == value:
+                return array1[row_index][col_index]
+    return None
+
+def get_total_cols(layout_grid, panel_dims):
+    return sum(panel_dims[panel['layout']][0] for panel in layout_grid[0])
+
+def get_total_rows(layout_grid, panel_dims):
+    return sum(max(panel_dims[panel['layout']][1] for panel in row) for row in layout_grid)
+
+def get_leds_per_row(layout_grid, panel_mapping):
+    leds_per_row = []
+    for row in layout_grid:
+        total_leds = sum(len(panel_mapping[panel['layout']]) for panel in row)
+        leds_per_row.append(total_leds)
+    return leds_per_row
+
+# Initialize
+layout_grid = [
+    [{'gpio': 1, 'layout': '2x3'}, {'gpio': 2, 'layout': '4x3'}],
+    [{'gpio': 3, 'layout': '4x2'}, {'gpio': 4, 'layout': '2x2'}],
+]
+
 panel_mapping = {
     '2x2':  [ 0,  1,
               3,  2],
@@ -22,148 +71,60 @@ panel_mapping = {
              20, 29, 21, 28, 22, 27, 23, 26, 24, 25],
 }
 
-# Panel layout in grid format (row-major)
-layout_grid = [
-    [
-        {'gpio': 1, 'layout': '2x3'}, {'gpio': 2, 'layout': '4x3'}
-    ],
-    [
-        {'gpio': 3, 'layout': '4x2'}, {'gpio': 4, 'layout': '2x2'}
-    ],
-]
-
-# Panel dimensions: (cols, rows)
 panel_dims = {
-    '2x3': (2, 3),
     '2x2': (2, 2),
+    '2x3': (2, 3),
     '4x2': (4, 2),
     '4x3': (4, 3),
 }
 
-# Total global layout dimensions
-def get_total_cols():
-    return sum(panel_dims[panel['layout']][0] for panel in layout_grid[0])
+total_cols = get_total_cols(layout_grid, panel_dims)
+total_rows = get_total_rows(layout_grid, panel_dims)
 
-def get_total_rows():
-    return sum(max(panel_dims[panel['layout']][1] for panel in row) for row in layout_grid)
-
-def get_leds_per_row(layout_grid, panel_mapping):
-    leds_per_row = []
-
-    for row in layout_grid:
-        total_leds = 0
-        for panel in row:
-            layout = panel['layout']
-            total_leds += len(panel_mapping[layout])
-        leds_per_row.append(total_leds)
-
-    return leds_per_row
-
-def find_value_in_array1_for_value_in_array2(value, array1, array2):
-    for row_index, row in enumerate(array2):
-        for col_index, element in enumerate(row):
-            if element == value:
-                return array1[row_index][col_index]
-    return None  # if value not found
-
-total_cols = get_total_cols()
-total_rows = get_total_rows()
-print(f"Global layout dimensions: {total_cols} x {total_rows} rows")
-
-
-
-led_matrix = []
-counter = 0
-for r in range(total_rows):
-    row = []
-    for c in range(total_cols):
-        row.append(counter)
-        counter += 1
-    led_matrix.append(row)
-
-
-
-
-leds_per_row = get_leds_per_row(layout_grid, panel_mapping);
-print(f"LEDs per row: {leds_per_row}\n")
-
-
-
-global_led_order = {}  # key = gpio, value = list of global indices
-
-
-# Iterate through each panel and print its GPIO and mapping
-for row_index, row in enumerate(layout_grid):
-    for panel in row:
-        gpio = panel['gpio']
-        layout = panel['layout']
-        mapping = panel_mapping[layout]
-        print(f"GPIO {gpio} ({layout}): {mapping}")
-print("")
-
-
-# Print panel mappings row by row
+# Generate full matrix of global LED indices
+led_matrix = [[c + r * total_cols for c in range(total_cols)] for r in range(total_rows)]
+offsets = calculate_offsets(layout_grid, panel_mapping)
+stiched_rows = []
 leds_so_far = 0
-stitched_rows = []
-for layout_index, layout_row in enumerate(layout_grid):
-#     print(f"LEDs so far: {leds_so_far}")
-    row_panels = []
 
-    # all panels in the same row must have the same amount of rows
-    # --> just take the first panel and extract the rows
+for row_idx, layout_row in enumerate(layout_grid):
     current_rows = panel_dims[layout_row[0]['layout']][1]
+    panel_matrices = []
+    for panel_idx, panel in enumerate(layout_row):
+        layout, mapping, (cols, rows) = get_panel_info(panel, panel_mapping, panel_dims)
+        offset = offsets[row_idx][panel_idx]
+        matrix = reshape_mapping(mapping, cols, offset)
 
-    # Build per-panel rows
-    panel_rows = []
+        layout_grid[row_idx][panel_idx]['LED_mapping_0_orig'] = mapping
+        layout_grid[row_idx][panel_idx]['LED_mapping_1'] = matrix
+        layout_grid[row_idx][panel_idx]['LED_mapping_1_flat'] = flatten(matrix)
+        panel_matrices.append(matrix)
 
-    for panel_index, panel in enumerate(layout_row):
-        layout = panel['layout']
-        mapping = panel_mapping[layout]
-        mapping_increased = [val + leds_so_far for val in mapping]
-        cols, rows = panel_dims[layout]
+    for r in range(current_rows):
+        row = []
+        for matrix in panel_matrices:
+            row.extend(matrix[r])
+        stiched_rows.append(row)
 
-        # Reshape panel mapping to 2D row-major
-        panel_matrix = [
-            mapping_increased[r * cols:(r + 1) * cols]
-            for r in range(rows)
-        ]
+# Re-map to global layout
+for row_idx, layout_row in enumerate(layout_grid):
+    for panel_idx, panel in enumerate(layout_row):
+        mapping_2 = []
+        for r, row in enumerate(panel['LED_mapping_1']):
+            new_row = [find_value_in_array1_for_value_in_array2(val, led_matrix, stiched_rows) for val in row]
+            mapping_2.append(new_row)
 
-        layout_grid[layout_index][panel_index]['LED_mapping_0_orig'] = panel_mapping[layout_grid[layout_index][panel_index]['layout']]
-        layout_grid[layout_index][panel_index]['LED_mapping_1'] = panel_matrix
-        layout_grid[layout_index][panel_index]['LED_mapping_1_flat'] = [item for row in panel_matrix for item in row]
+        panel['LED_mapping_2'] = mapping_2
+        panel['LED_mapping_2_flat'] = flatten(mapping_2)
 
-        panel_rows.append(panel_matrix)
-        leds_so_far += len(panel_mapping[panel['layout']])
+        # Reorder to match original mapping order
+        ordered = [None] * len(panel['LED_mapping_0_orig'])
+        for i, target_index in enumerate(panel['LED_mapping_0_orig']):
+            ordered[target_index] = panel['LED_mapping_2_flat'][i]
 
+        panel['LED_mapping_3_flat'] = ordered
 
-    # Stitch together all rows for this layout_row
-    for row_index, row in enumerate(range(current_rows)):
-        stitched_row = []
-        for panel_matrix in panel_rows:
-            stitched_row.extend(panel_matrix[row])
-        stitched_rows.append(stitched_row)
-
-
-for layout_index, layout_row in enumerate(layout_grid):
-    for panel_index, panel in enumerate(layout_row):
-        led_mapping_2 = []
-        for row_index, row in enumerate(panel['LED_mapping_1']):
-            tmp_led_mapping_row = []
-            for col_index, col in enumerate(row):
-                corresponding_value = find_value_in_array1_for_value_in_array2(col, led_matrix, stitched_rows)
-                tmp_led_mapping_row.append(corresponding_value)
-
-            led_mapping_2.append(tmp_led_mapping_row)
-        layout_grid[layout_index][panel_index]['LED_mapping_2'] = led_mapping_2
-        layout_grid[layout_index][panel_index]['LED_mapping_2_flat'] = [item for row in led_mapping_2 for item in row]
-
-        ordered = [None] * len(layout_grid[layout_index][panel_index]['LED_mapping_0_orig'])
-        for i, target_index in enumerate(layout_grid[layout_index][panel_index]['LED_mapping_0_orig']):
-            ordered[target_index] = layout_grid[layout_index][panel_index]['LED_mapping_2_flat'][i]
-
-        layout_grid[layout_index][panel_index]['LED_mapping_3_flat'] = ordered
-
-
-for layout_index, layout_row in enumerate(layout_grid):
-    for panel_index, panel in enumerate(layout_row):
-        print(f"{panel['gpio']}: {panel['LED_mapping_3_flat']}")
+# Output final panel maps
+for row in layout_grid:
+    for panel in row:
+        print(f"GPIO {panel['gpio']}: {panel['LED_mapping_3_flat']}")
