@@ -7,9 +7,9 @@ def reshape_mapping(mapping, cols, offset=0):
     mapping = [val + offset for val in mapping]
     return [mapping[r * cols:(r + 1) * cols] for r in range(len(mapping) // cols)]
 
-def get_panel_info(panel, panel_mapping, panel_dims):
+def get_panel_info(panel, panel_mapping):
     layout = panel['layout']
-    return layout, panel_mapping[layout], panel_dims[layout]
+    return layout, panel_mapping[layout], get_dims_from_key(layout)
 
 def calculate_offsets(layout_grid, panel_mapping):
     offset = 0
@@ -29,11 +29,11 @@ def find_value_in_array1_for_value_in_array2(value, array1, array2):
                 return array1[row_index][col_index]
     return None
 
-def get_total_cols(layout_grid, panel_dims):
-    return sum(panel_dims[panel['layout']][0] for panel in layout_grid[0])
+def get_total_cols(layout_grid):
+    return sum(get_dims_from_key(panel['layout'])[0] for panel in layout_grid[0])
 
-def get_total_rows(layout_grid, panel_dims):
-    return sum(max(panel_dims[panel['layout']][1] for panel in row) for row in layout_grid)
+def get_total_rows(layout_grid):
+    return sum(max(get_dims_from_key(panel['layout'])[1] for panel in row) for row in layout_grid)
 
 def get_leds_per_row(layout_grid, panel_mapping):
     leds_per_row = []
@@ -41,6 +41,11 @@ def get_leds_per_row(layout_grid, panel_mapping):
         total_leds = sum(len(panel_mapping[panel['layout']]) for panel in row)
         leds_per_row.append(total_leds)
     return leds_per_row
+
+def get_dims_from_key(layout_key):
+    """Parses a layout key like '2x3' and returns (cols, rows) as integers"""
+    w, h = layout_key.split('x')
+    return int(w), int(h)
 
 # Initialize
 layout_grid = [
@@ -71,15 +76,8 @@ panel_mapping = {
              20, 29, 21, 28, 22, 27, 23, 26, 24, 25],
 }
 
-panel_dims = {
-    '2x2': (2, 2),
-    '2x3': (2, 3),
-    '4x2': (4, 2),
-    '4x3': (4, 3),
-}
-
-total_cols = get_total_cols(layout_grid, panel_dims)
-total_rows = get_total_rows(layout_grid, panel_dims)
+total_cols = get_total_cols(layout_grid)
+total_rows = get_total_rows(layout_grid)
 
 # Generate full matrix of global LED indices
 led_matrix = [[c + r * total_cols for c in range(total_cols)] for r in range(total_rows)]
@@ -88,10 +86,10 @@ stiched_rows = []
 leds_so_far = 0
 
 for row_idx, layout_row in enumerate(layout_grid):
-    current_rows = panel_dims[layout_row[0]['layout']][1]
+    current_rows = get_dims_from_key(layout_row[0]['layout'])[1]
     panel_matrices = []
     for panel_idx, panel in enumerate(layout_row):
-        layout, mapping, (cols, rows) = get_panel_info(panel, panel_mapping, panel_dims)
+        layout, mapping, (cols, rows) = get_panel_info(panel, panel_mapping)
         offset = offsets[row_idx][panel_idx]
         matrix = reshape_mapping(mapping, cols, offset)
 
