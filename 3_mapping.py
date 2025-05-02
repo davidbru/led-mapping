@@ -105,4 +105,12 @@ for row in sort:
         panel['mapping_final'] = [panel_chars[i] for i in panel['mapping_raw']]
         current_x += w
 
-print(sort)
+
+# Final GPIO-Data dictionary
+gpio_to_data = {
+    panel['gpio']: panel['mapping_final']
+    for row in sort
+    for panel in row['panels']
+}
+
+print(gpio_to_data)
