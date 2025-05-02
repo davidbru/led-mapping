@@ -41,59 +41,62 @@ sort = [
 
 
 
-for name, definition in map_definitions.items():
-    width = definition['width']
-    height = definition['height']
-    area = width * height
-    definition['area'] = area  # Add new key to each definition
+def calculate_panel_properties(panel, definition, global_offset):
+    panel['global_offset'] = global_offset
+    panel['width'] = definition['width']
+    panel['height'] = definition['height']
+    panel['mapping_raw'] = definition['mapping']
+    return global_offset + definition['width'] * definition['height']
 
+# Add area key to map_definitions
+for definition in map_definitions.values():
+    definition['area'] = definition['width'] * definition['height']
 
 global_offset = 0
-for row_index, row in enumerate(sort):
-    row['panel_row_width'] = 0
-    row['panel_row_height'] = 0
-    row['all_panel_rows_are_equal_height'] = True
-    for panel_index, panel in enumerate(row['panels']):
-        panel['global_offset'] = global_offset
-        panel['width'] = map_definitions[panel['layout']]['width']
-        panel['height'] = map_definitions[panel['layout']]['height']
-        panel['mapping_0_orig'] = map_definitions[panel['layout']]['mapping']
-        row['panel_row_width'] += map_definitions[panel['layout']]['width']
-        if row['panel_row_height'] != 0:
-            if row['panel_row_height'] != map_definitions[panel['layout']]['height']:
-                row['all_panel_rows_are_equal_height'] = False
-        row['panel_row_height'] = map_definitions[panel['layout']]['height']
-        global_offset += map_definitions[panel['layout']]['area']
-
-
 for row in sort:
-    panel_row_height = row['panel_row_height']
+    row['panel_row_width'] = 0
+    heights = set()
+
+    for panel in row['panels']:
+        definition = map_definitions[panel['layout']]
+        global_offset = calculate_panel_properties(panel, definition, global_offset)
+        row['panel_row_width'] += definition['width']
+        heights.add(definition['height'])
+
+    row['panel_row_height'] = max(heights)
+    row['all_panel_rows_are_equal_height'] = len(heights) == 1
+
+
+# Check if all panel rows have panels of equal height
+for row_index, row in enumerate(sort):
+    if not row['all_panel_rows_are_equal_height']:
+        raise ValueError(f"Row {row_index} has panels of unequal height. Aborting.")
+
+
+# Check if all panel rows have the same width
+row_widths = [row['panel_row_width'] for row in sort]
+if len(set(row_widths)) != 1:
+    raise ValueError(f"Panel rows have different widths: {row_widths}")
+
+
+# Assign input data based on mapping
+for row in sort:
+    row_offset = row['panels'][0]['global_offset']
     panel_row_width = row['panel_row_width']
-    row_offset = row['panels'][0]['global_offset']  # assume leftmost panel defines row start
+    panel_row_height = row['panel_row_height']
 
-    # Build the full 2D grid for the entire row
-    full_grid = []
-    for y in range(panel_row_height):
-        start = row_offset + y * panel_row_width
-        end = start + panel_row_width
-        row_data = input_data[start:end]
-        full_grid.append(row_data)
+    # Build full 2D grid of characters for the row
+    full_grid = [
+        input_data[row_offset + y * panel_row_width : row_offset + (y + 1) * panel_row_width]
+        for y in range(panel_row_height)
+    ]
 
-    # Assign mapping_2 to each panel
+    # Assign character mappings per panel
     current_x = 0
     for panel in row['panels']:
-        w = panel['width']
-        h = panel['height']
-        x_start = current_x
+        w, h = panel['width'], panel['height']
+        panel_chars = [ch for y in range(h) for ch in full_grid[y][current_x:current_x + w]]
+        panel['mapping_final'] = [panel_chars[i] for i in panel['mapping_raw']]
         current_x += w
 
-        # Extract this panel's slice from the full grid
-        panel_chars = []
-        for y in range(h):
-            panel_chars.extend(full_grid[y][x_start:x_start + w])
-
-        # Apply mapping_0_orig
-        panel['mapping_1_applied'] = [panel_chars[i] for i in panel['mapping_0_orig']]
-
-# Preview result
 print(sort)
