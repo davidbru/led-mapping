@@ -40,13 +40,26 @@ sort = [
 ]
 
 
-
+# ---------------- #
+# HELPER FUNCTIONS #
+# ---------------- #
 def calculate_panel_properties(panel, definition, global_offset):
     panel['global_offset'] = global_offset
     panel['width'] = definition['width']
     panel['height'] = definition['height']
     panel['mapping_raw'] = definition['mapping']
     return global_offset + definition['width'] * definition['height']
+
+def validate_row_heights(sort):
+    for row_index, row in enumerate(sort):
+        if not row['all_panel_rows_are_equal_height']:
+            raise ValueError(f"Row {row_index} has panels of unequal height. Aborting.")
+
+def validate_row_widths(sort):
+    row_widths = [row['panel_row_width'] for row in sort]
+    if len(set(row_widths)) != 1:
+        raise ValueError(f"Panel rows have different widths: {row_widths}")
+
 
 # Add area key to map_definitions
 for definition in map_definitions.values():
@@ -67,16 +80,9 @@ for row in sort:
     row['all_panel_rows_are_equal_height'] = len(heights) == 1
 
 
-# Check if all panel rows have panels of equal height
-for row_index, row in enumerate(sort):
-    if not row['all_panel_rows_are_equal_height']:
-        raise ValueError(f"Row {row_index} has panels of unequal height. Aborting.")
-
-
-# Check if all panel rows have the same width
-row_widths = [row['panel_row_width'] for row in sort]
-if len(set(row_widths)) != 1:
-    raise ValueError(f"Panel rows have different widths: {row_widths}")
+# Check if all panel rows have have proper width and height
+validate_row_widths(sort)
+validate_row_heights(sort)
 
 
 # Assign input data based on mapping
