@@ -57,6 +57,7 @@ sort = [
 ]
 
 gpio_to_indices = {}
+DEBUG = True
 
 
 # ---------------- #
@@ -128,9 +129,6 @@ def basic_panel_preparation():
     validate_row_widths(sort)
     validate_row_heights(sort)
 
-    op('text1').clear()
-    op('text1').write(f"gpio_to_indices: {gpio_to_indices}")
-
 
 
 # --------------------------------------- #
@@ -155,19 +153,17 @@ def cellChange(dat, cells, prev):
 
     op('text1').clear()
 
-    # Step 1: Parse DAT into list of RGB tuples
+    # Step 1: Parse DAT into list of RGB tuples using dat[i, col]
     raw_rgb_tuples = []
     for i in range(dat.numRows):
-        row = dat.row(i)
-        if len(row) >= 3:
-            try:
-                r = int(row[0].val)
-                g = int(row[1].val)
-                b = int(row[2].val)
-                raw_rgb_tuples.append((r, g, b))
-            except ValueError:
-                op('text1').write(f"❌ Invalid RGB at row {i}: {row[0].val}, {row[1].val}, {row[2].val}")
-                return
+        try:
+            r = int(dat[i, 0])
+            g = int(dat[i, 1])
+            b = int(dat[i, 2])
+            raw_rgb_tuples.append((r, g, b))
+        except (ValueError, TypeError):
+            op('text1').write(f"❌ Invalid RGB at row {i}: {dat[i, 0].val}, {dat[i, 1].val}, {dat[i, 2].val}")
+            return
 
     # Step 2: Send one binary packet per GPIO using precomputed indices
     for gpio, indices in gpio_to_indices.items():
