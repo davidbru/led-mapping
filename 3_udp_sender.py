@@ -38,6 +38,15 @@ map_definitions = {
             5, 4, 3
         ]
     },
+    '4x3': {
+        'width': 4,
+        'height': 3,
+        'mapping': [
+            0, 1, 2, 3,
+            7, 6, 5, 4,
+            8, 9, 10, 11
+        ]
+    },
     '20x10': {
         'width': 20,
         'height': 10,
@@ -59,9 +68,9 @@ map_definitions = {
 sort = [
     {
         'panels': [
-            {'layout': '20x10', 'gpio': 2},
-#             {'layout': '2x2', 'gpio': 3},
-#             {'layout': '2x2', 'gpio': 3}
+#             {'layout': '4x3', 'gpio': 2},
+            {'layout': '3x2', 'gpio': 2},
+            {'layout': '3x2', 'gpio': 3}
         ]
     },
 #     {
@@ -185,6 +194,7 @@ def cellChange(dat, cells, prev):
     # Step 2: Send one binary packet per GPIO using precomputed indices
     for gpio, indices in gpio_to_indices.items():
         byte_array = bytearray()
+        byte_array.append(gpio)  # 1-byte header: GPIO number
         try:
             for i in indices:
                 r, g, b = raw_rgb_tuples[i]
@@ -196,7 +206,10 @@ def cellChange(dat, cells, prev):
         if len(byte_array) > 1450:
             op('text1').write(f"⚠️ GPIO {gpio} packet too large: {len(byte_array)} bytes")
         else:
-            rgb_list = list(struct.iter_unpack('BBB', byte_array))
+            # Skip the first byte (the GPIO header)
+            rgb_payload = byte_array[1:]
+            rgb_list = list(struct.iter_unpack('BBB', rgb_payload))
+
             readable = '\n'.join(f"{i:3}: R={r:3} G={g:3} B={b:3}" for i, (r, g, b) in enumerate(rgb_list))
             if DEBUG and DEBUG_GPIO == gpio:
                 op('text1').write(f"GPIO {gpio} RGB data:\n{readable}\n")
