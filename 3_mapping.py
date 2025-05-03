@@ -56,7 +56,7 @@ sort = [
 #     },
 ]
 
-gpio_to_data = {}
+gpio_to_indices = {}
 
 
 # ---------------- #
@@ -82,6 +82,9 @@ def validate_row_widths(sort):
 def basic_panel_preparation():
     global map_definitions
     global sort
+    global gpio_to_indices
+
+    gpio_to_indices = {}  # Initialize or clear the dictionary
 
     # Add area key to map_definitions
     for definition in map_definitions.values():
@@ -92,6 +95,7 @@ def basic_panel_preparation():
         row['panel_row_width'] = 0
         heights = set()
 
+        # Step 1: Prepare panels and calculate sizes
         for panel in row['panels']:
             definition = map_definitions[panel['layout']]
             global_offset = calculate_panel_properties(panel, definition, global_offset)
@@ -101,10 +105,31 @@ def basic_panel_preparation():
         row['panel_row_height'] = max(heights)
         row['all_panel_rows_are_equal_height'] = len(heights) == 1
 
+        # Step 2: Precompute static index mappings for each panel
+        row_offset = row['panels'][0]['global_offset']
+        panel_row_width = row['panel_row_width']
+        panel_row_height = row['panel_row_height']
 
-    # Check if all panel rows have have proper width and height
+        current_x = 0
+        for panel in row['panels']:
+            w, h = panel['width'], panel['height']
+            panel_indices = []
+
+            for i in panel['mapping_raw']:
+                y = i // w
+                x = i % w
+                absolute_index = (y * panel_row_width) + (current_x + x)
+                panel_indices.append(row_offset + absolute_index)
+
+            gpio_to_indices[panel['gpio']] = panel_indices
+            current_x += w
+
+    # Check consistency
     validate_row_widths(sort)
     validate_row_heights(sort)
+
+    op('text1').clear()
+    op('text1').write(f"gpio_to_indices: {gpio_to_indices}")
 
 
 
@@ -112,8 +137,8 @@ def basic_panel_preparation():
 # TouchDesigner DAT execute DAT functions #
 # --------------------------------------- #
 def tableChange(dat):
-    op('text1').clear()
-    #op('text1').write('You changed DAT: \n' +str(dat))
+#     op('text1').clear()
+#     op('text1').write('You changed DAT: \n' +str(dat))
     return
 
 
@@ -126,62 +151,43 @@ def colChange(dat, cols):
 
 
 def cellChange(dat, cells, prev):
-    global sort
-    global gpio_to_data
+    global gpio_to_indices
 
     op('text1').clear()
 
-    # Step 1: Flatten DAT into RGB rows
-    raw_rgb_rows = [[cell.val for cell in row] for row in dat.rows()]
+    # Step 1: Parse DAT into list of RGB tuples
+    raw_rgb_tuples = []
+    for i in range(dat.numRows):
+        row = dat.row(i)
+        if len(row) >= 3:
+            try:
+                r = int(row[0].val)
+                g = int(row[1].val)
+                b = int(row[2].val)
+                raw_rgb_tuples.append((r, g, b))
+            except ValueError:
+                op('text1').write(f"❌ Invalid RGB at row {i}: {row[0].val}, {row[1].val}, {row[2].val}")
+                return
 
-    # Step 2: Assign input data based on mapping
-    for row in sort:
-        row_offset = row['panels'][0]['global_offset']
-        panel_row_width = row['panel_row_width']
-        panel_row_height = row['panel_row_height']
+    # Step 2: Send one binary packet per GPIO using precomputed indices
+    for gpio, indices in gpio_to_indices.items():
+        byte_array = bytearray()
+        try:
+            for i in indices:
+                r, g, b = raw_rgb_tuples[i]
+                byte_array += struct.pack('BBB', r, g, b)
+        except IndexError:
+            op('text1').write(f"❌ IndexError: One of the RGB indices for GPIO {gpio} is out of range.")
+            continue
 
-        # Build full 2D grid of characters for the row
-        full_grid = [
-            raw_rgb_rows[row_offset + y * panel_row_width : row_offset + (y + 1) * panel_row_width]
-            for y in range(panel_row_height)
-        ]
+        if len(byte_array) > 1450:
+            op('text1').write(f"⚠️ GPIO {gpio} packet too large: {len(byte_array)} bytes")
+        else:
+            rgb_list = list(struct.iter_unpack('BBB', byte_array))
+            readable = '\n'.join(f"{i:3}: R={r:3} G={g:3} B={b:3}" for i, (r, g, b) in enumerate(rgb_list))
+            op('text1').write(f"GPIO {gpio} RGB data:\n{readable}\n")
 
-        # Assign character mappings per panel
-        current_x = 0
-        for panel in row['panels']:
-            w, h = panel['width'], panel['height']
-            panel_chars = [ch for y in range(h) for ch in full_grid[y][current_x:current_x + w]]
-            panel['mapping_final'] = [panel_chars[i] for i in panel['mapping_raw']]
-            current_x += w
-
-    # Step 3: Final GPIO-Data dictionary
-    gpio_to_data = {
-        panel['gpio']: panel['mapping_final']
-        for row in sort
-        for panel in row['panels']
-    }
-
-    # Step 4: Send one binary packet per GPIO
-    for gpio, rgb_values in gpio_to_data.items():
-        if gpio <= 50:
-            byte_array = bytearray()
-            for rgb in rgb_values:
-                r, g, b = (int(x) for x in rgb)
-                byte_array += struct.pack('BBB', r, g, b)  # 3 bytes per LED
-
-            # Optional: prepend GPIO pin as 1 byte or 2 bytes if needed
-            # byte_array = struct.pack('B', gpio) + byte_array  # Uncomment to add GPIO as header
-
-            if len(byte_array) > 1450:
-                op('text1').write(f"⚠️ GPIO {gpio} packet too large: {len(byte_array)} bytes")
-            else:
-                # debug data
-                rgb_list = list(struct.iter_unpack('BBB', byte_array))
-                readable = '\n'.join(f"{i:3}: R={r:3} G={g:3} B={b:3}" for i, (r, g, b) in enumerate(rgb_list))
-                op('text1').write(f"GPIO {gpio} RGB data:\n{readable}\n")
-
-                # send data
-                op('udpout1').sendBytes(byte_array)
+            op('udpout1').sendBytes(byte_array)
 
 
 def sizeChange(dat):
