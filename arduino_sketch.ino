@@ -4,7 +4,6 @@
 
 #define ADD_STRIP(CHIP, PIN, OFFSET, COUNT) FastLED.addLeds<CHIP, PIN, RGB>(leds + OFFSET, COUNT);
 
-
 // UPDATE ACCORDING TO LIVE SCENARIO
 const uint16_t ledCounts[] = {200, 60};
 #define STRIP_1_GPIO 2
@@ -27,7 +26,11 @@ void setup() {
   // UPDATE ACCORDING TO LIVE SCENARIO
   uint16_t offset = 0;
   ADD_STRIP(WS2812B, STRIP_1_GPIO, offset, ledCounts[0]); offset += ledCounts[0];
-  ADD_STRIP(WS2812B, STRIP_2_GPIO, offset, ledCounts[1]); offset += ledCounts[1];
+//  ADD_STRIP(WS2812B, STRIP_2_GPIO, offset, ledCounts[1]); offset += ledCounts[1];
+
+
+  // DEFINE MAX BRIGHTNESS OF ALL LEDS ACROSS ALL PANELS
+  FastLED.setMaxPowerInVoltsAndMilliamps(5, 200);
 
 
   FastLED.clear();
