@@ -13,8 +13,14 @@
 import struct  # Only needed for byte-packing
 
 
+# --------------------------------- #
+# VARIABLE AND CONSTANT DEFINITIONS #
+# --------------------------------- #
 DEBUG = True
 GPIO_TO_DEBUG = 2
+
+last_execution_time = 0
+MIN_FRAME_INTERVAL = 1.0 / 24.0  # 24 FPS = ~0.0417 seconds between frames
 
 MAP_DEFINITIONS = {
     '1x2': {
@@ -177,6 +183,14 @@ def colChange(dat, cols):
 
 def cellChange(dat, cells, prev):
     global gpio_to_indices
+    global last_execution_time
+    
+    # Throttle execution to 24 FPS
+    current_time = absTime.seconds
+    if current_time - last_execution_time < MIN_FRAME_INTERVAL:
+        return  # Skip this execution
+    
+    last_execution_time = current_time
 
     op('text1').clear()
 
