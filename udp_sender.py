@@ -83,7 +83,7 @@ sort = [
 
 gpio_to_indices = {}
 DEBUG = True
-DEBUG_GPIO = 2
+GPIO_TO_DEBUG = 2
 
 
 # ---------------- #
@@ -211,7 +211,7 @@ def cellChange(dat, cells, prev):
             rgb_list = list(struct.iter_unpack('BBB', rgb_payload))
 
             readable = '\n'.join(f"{i:3}: R={r:3} G={g:3} B={b:3}" for i, (r, g, b) in enumerate(rgb_list))
-            if DEBUG and DEBUG_GPIO == gpio:
+            if DEBUG and GPIO_TO_DEBUG == gpio:
                 op('text1').write(f"GPIO {gpio} RGB data:\n{readable}\n")
 
             op('udpout1').sendBytes(byte_array)
