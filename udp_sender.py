@@ -13,7 +13,10 @@
 import struct  # Only needed for byte-packing
 
 
-map_definitions = {
+DEBUG = True
+GPIO_TO_DEBUG = 2
+
+MAP_DEFINITIONS = {
     '1x2': {
         'width': 1,
         'height': 2,
@@ -65,7 +68,7 @@ map_definitions = {
     }
 }
 
-sort = [
+SORT = [
     {
         'panels': [
 #             {'layout': '4x3', 'gpio': 2},
@@ -82,8 +85,6 @@ sort = [
 ]
 
 gpio_to_indices = {}
-DEBUG = True
-GPIO_TO_DEBUG = 2
 
 
 # ---------------- #
@@ -96,35 +97,35 @@ def calculate_panel_properties(panel, definition, global_offset):
     panel['mapping_raw'] = definition['mapping']
     return global_offset + definition['width'] * definition['height']
 
-def validate_row_heights(sort):
-    for row_index, row in enumerate(sort):
+def validate_row_heights(SORT):
+    for row_index, row in enumerate(SORT):
         if not row['all_panel_rows_are_equal_height']:
             raise ValueError(f"Row {row_index} has panels of unequal height. Aborting.")
 
-def validate_row_widths(sort):
-    row_widths = [row['panel_row_width'] for row in sort]
+def validate_row_widths(SORT):
+    row_widths = [row['panel_row_width'] for row in SORT]
     if len(set(row_widths)) != 1:
         raise ValueError(f"Panel rows have different widths: {row_widths}")
 
 def basic_panel_preparation():
-    global map_definitions
-    global sort
+    global MAP_DEFINITIONS
+    global SORT
     global gpio_to_indices
 
     gpio_to_indices = {}  # Initialize or clear the dictionary
 
-    # Add area key to map_definitions
-    for definition in map_definitions.values():
+    # Add area key to MAP_DEFINITIONS
+    for definition in MAP_DEFINITIONS.values():
         definition['area'] = definition['width'] * definition['height']
 
     global_offset = 0
-    for row in sort:
+    for row in SORT:
         row['panel_row_width'] = 0
         heights = set()
 
         # Step 1: Prepare panels and calculate sizes
         for panel in row['panels']:
-            definition = map_definitions[panel['layout']]
+            definition = MAP_DEFINITIONS[panel['layout']]
             global_offset = calculate_panel_properties(panel, definition, global_offset)
             row['panel_row_width'] += definition['width']
             heights.add(definition['height'])
@@ -152,8 +153,8 @@ def basic_panel_preparation():
             current_x += w
 
     # Check consistency
-    validate_row_widths(sort)
-    validate_row_heights(sort)
+    validate_row_widths(SORT)
+    validate_row_heights(SORT)
 
 
 
