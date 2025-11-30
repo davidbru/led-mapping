@@ -225,9 +225,16 @@ def cellChange(dat, cells, prev):
             rgb_payload = byte_array[1:]
             rgb_list = list(struct.iter_unpack('BBB', rgb_payload))
 
-            readable = '\n'.join(f"{i:3}: R={r:3} G={g:3} B={b:3}" for i, (r, g, b) in enumerate(rgb_list))
-            if DEBUG and GPIO_TO_DEBUG == gpio:
-                op('text1').write(f"GPIO {gpio} RGB data:\n{readable}\n")
+            readable_lines = []
+            for i, (r, g, b) in enumerate(rgb_list):
+                hexval = f"#{r:02X}{g:02X}{b:02X}"
+                readable_lines.append(
+                    f"{i:3}: R={r:3} G={g:3} B={b:3}  HEX={hexval}"
+                )
+
+            readable = "\n".join(readable_lines)
+
+            op('text1').write(f"GPIO {gpio} RGB data:\n{readable}\n")
 
             op('udpout1').sendBytes(byte_array)
 
