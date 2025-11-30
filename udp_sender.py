@@ -74,20 +74,23 @@ MAP_DEFINITIONS = {
     }
 }
 
+# if
+# 'gpio': None
+# the panel is not sent to the teensy
 SORT = [
     {
         'panels': [
 #             {'layout': '4x3', 'gpio': 2},
-            {'layout': '3x2', 'gpio': 2},
+            {'layout': '2x2', 'gpio': 2},
             {'layout': '3x2', 'gpio': 3}
         ]
     },
-#     {
-#         'panels': [
-#             {'layout': '2x2', 'gpio': 4},
-#             {'layout': '3x2', 'gpio': 5}
-#         ]
-#     },
+    {
+        'panels': [
+            {'layout': '3x2', 'gpio': None},
+            {'layout': '2x2', 'gpio': 5}
+        ]
+    },
 ]
 
 gpio_to_indices = {}
@@ -155,7 +158,9 @@ def basic_panel_preparation():
                 absolute_index = (y * panel_row_width) + (current_x + x)
                 panel_indices.append(row_offset + absolute_index)
 
-            gpio_to_indices[panel['gpio']] = panel_indices
+            # ⬅️ Skip disabled panels
+            if panel['gpio'] is not None:
+                gpio_to_indices[panel['gpio']] = panel_indices
             current_x += w
 
     # Check consistency
