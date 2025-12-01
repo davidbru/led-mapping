@@ -1,3 +1,7 @@
+# copy the content of this script into the touchdesigner file > "datexec1"
+# it only sends debug output if it receives new pixel data
+# --> static image = no (new) debug infos
+
 # me is this DAT.
 #
 # dat is the changed DAT.
