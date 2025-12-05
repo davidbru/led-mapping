@@ -38,42 +38,31 @@ mapping = [
     ]
 ]
 
-# Step 1: Build led_group_values preserving insertion order
-led_group_values = {}
-row_offset = 0
+# Build flattened final array directly
+led_entries = []
 
+row_offset = 0
 for panel_row in mapping:
     max_height = max(len(panel_definitions[p['used_panel']]) for p in panel_row)
     col_offset = 0
-
     for panel in panel_row:
         layout = panel_definitions[panel['used_panel']]
         gpio = panel['gpioPin']
         order = panel['orderInGpioPinGroup']
 
-        if gpio not in led_group_values:
-            led_group_values[gpio] = {}
-        if order not in led_group_values[gpio]:
-            led_group_values[gpio][order] = {}
-
         for r, layout_row in enumerate(layout):
             for c, cell in enumerate(layout_row):
-                led_group_values[gpio][order][cell] = original[row_offset + r][col_offset + c]
+                led_entries.append((gpio, order, cell, original[row_offset + r][col_offset + c]))
 
         col_offset += len(layout[0])
     row_offset += max_height
 
-print("led_group_values:", led_group_values)
+# Sort by (gpio, orderInGpioPinGroup, cell index) to get correct flattened order
+led_entries.sort(key=lambda x: (x[0], x[1], x[2]))
 
-# Step 2: Flatten with **sorted order** for output
-led_stripe_values_flattened = {
-    gpio: [
-        value
-        for order in sorted(led_group_values[gpio].keys())          # sort by orderInGpioPinGroup
-        for cell in sorted(led_group_values[gpio][order].keys())     # sort by cell index
-        for value in [led_group_values[gpio][order][cell]]
-    ]
-    for gpio in sorted(led_group_values.keys())                      # optional: sort GPIOs
-}
+# Extract only the values for the final flattened array
+led_stripe_values_flattened = {}
+for gpio, _, _, value in led_entries:
+    led_stripe_values_flattened.setdefault(gpio, []).append(value)
 
 print("led_stripe_values_flattened:", led_stripe_values_flattened)
