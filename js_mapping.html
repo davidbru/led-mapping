@@ -36,12 +36,12 @@
 
     const mapping = [
         [
-            { used_panel: '2x3_top_left', group: 'A', order_in_group: 2 },
-            { used_panel: '2x3_bottom_left', group: 'B', order_in_group: 2 },
+            { used_panel: '2x3_top_left', gpioPin: 2, orderInGpioPinGroup: 2 },
+            { used_panel: '2x3_bottom_left', gpioPin: 3, orderInGpioPinGroup: 2 },
         ],
         [
-            { used_panel: '2x2_bottom_right', group: 'A', order_in_group: 3 },
-            { used_panel: '2x2_top_left', group: 'B', order_in_group: 1 },
+            { used_panel: '2x2_bottom_right', gpioPin: 2, orderInGpioPinGroup: 3 },
+            { used_panel: '2x2_top_left', gpioPin: 3, orderInGpioPinGroup: 1 },
         ]
     ];
 
@@ -64,13 +64,13 @@
                     let localOffsetColTarget = globalOffsetColTarget[varPanelsRowPanel] + varLocalCol;
 
 
-                    if (!ledGroupValues[currentPanel['group']]) {
-                        ledGroupValues[currentPanel['group']] = {};
+                    if (!ledGroupValues[currentPanel['gpioPin']]) {
+                        ledGroupValues[currentPanel['gpioPin']] = {};
                     }
-                    if (!ledGroupValues[currentPanel['group']][currentPanel['order_in_group']]) {
-                        ledGroupValues[currentPanel['group']][currentPanel['order_in_group']] = {};
+                    if (!ledGroupValues[currentPanel['gpioPin']][currentPanel['orderInGpioPinGroup']]) {
+                        ledGroupValues[currentPanel['gpioPin']][currentPanel['orderInGpioPinGroup']] = {};
                     }
-                    ledGroupValues[currentPanel['group']][currentPanel['order_in_group']][currentPanelLayoutRowCell] = original[localOffsetRowTarget][localOffsetColTarget];
+                    ledGroupValues[currentPanel['gpioPin']][currentPanel['orderInGpioPinGroup']][currentPanelLayoutRowCell] = original[localOffsetRowTarget][localOffsetColTarget];
                 }
             }
 
@@ -79,6 +79,15 @@
 
         globalOffsetRowTarget[varPanelsRow+1] = globalOffsetRowTarget[varPanelsRow] + currentPanelsRowHeight;
     }
+    console.log('ledGroupValues', ledGroupValues);
 
-    console.log(ledGroupValues);
+    // Flatten the LedGroupValues for outputting it to the LED-Stripe
+    const ledStripeValuesFlattened = Object.fromEntries(
+        Object.entries(ledGroupValues).map(([group, sections]) => [
+            group,
+            Object.values(sections)
+                .flatMap(section => Object.values(section))
+        ])
+    );
+    console.log('ledStripeValuesFlattened', ledStripeValuesFlattened);
 </script>
