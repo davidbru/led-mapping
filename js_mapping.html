@@ -1,11 +1,12 @@
 <script type="text/javascript">
-    // works with 1 row
+    // works with multiple row
 
     const original = [
         ['a', 'b', 'c', 'd'],
         ['e', 'f', 'g', 'h'],
         ['i', 'j', 'k', 'l'],
-        ['m', 'n', 'o', 'p']
+        ['m', 'n', 'o', 'p'],
+        ['q', 'r', 's', 't']
     ];
 
     const panelDefinitions = {
@@ -20,63 +21,47 @@
         '3x2_bottom_right': [
             [3, 4, 5],
             [2, 1, 0]
-        ]
+        ],
+        '2x3_top_left': [
+            [0, 1],
+            [5, 2],
+            [4, 3]
+        ],
+        '2x3_bottom_left': [
+            [4, 3],
+            [5, 2],
+            [0, 1]
+        ],
     };
 
     const mapping = [
         [
-            { used_panel: '2x2_top_left', group: 'A', order_in_group: 2 },
-            // { used_panel: '3x2_bottom_right', group: 'A', order_in_group: 1 },
-            { used_panel: '2x2_bottom_right', group: 'A', order_in_group: 1 },
+            { used_panel: '2x3_top_left', group: 'A', order_in_group: 2 },
+            { used_panel: '2x3_bottom_left', group: 'B', order_in_group: 2 },
         ],
-        // [
-        //     { used_panel: '2x2_bottom_right', group: 'A', order_in_group: 3 },
-        //     // { used_panel: '3x2_bottom_right', group: 'A', order_in_group: 1 },
-        //     { used_panel: '2x2_bottom_right', group: 'B', order_in_group: 1 },
-        // ]
+        [
+            { used_panel: '2x2_bottom_right', group: 'A', order_in_group: 3 },
+            { used_panel: '2x2_top_left', group: 'B', order_in_group: 1 },
+        ]
     ];
 
-    let flattenedPanelMapping = [];
     let ledGroupValues = {};
+    let currentPanelsRowHeight = 0;
+    let globalOffsetRowTarget = [0];
     for(let varPanelsRow = 0; varPanelsRow < mapping.length; varPanelsRow++) {
         let currentPanelRow = mapping[varPanelsRow];
         let globalOffsetColTarget = [0];
         for(let varPanelsRowPanel = 0; varPanelsRowPanel < currentPanelRow.length; varPanelsRowPanel++) {
             let currentPanel = currentPanelRow[varPanelsRowPanel];
             let currentPanelLayout = panelDefinitions[currentPanel['used_panel']];
-            // console.log('currentPanelLayout', currentPanelLayout);
-
+            currentPanelsRowHeight = currentPanelLayout.length
 
             for(let varLocalRow = 0; varLocalRow < currentPanelLayout.length; varLocalRow++) {
                 let currentPanelLayoutRow = currentPanelLayout[varLocalRow];
+                let localOffsetRowTarget = globalOffsetRowTarget[varPanelsRow] + varLocalRow;
                 for(let varLocalCol = 0; varLocalCol < currentPanelLayoutRow.length; varLocalCol++) {
                     let currentPanelLayoutRowCell = currentPanelLayoutRow[varLocalCol];
                     let localOffsetColTarget = globalOffsetColTarget[varPanelsRowPanel] + varLocalCol;
-
-
-
-                    // flattenedPanelMapping is not really necessary
-                    console.log(
-                        'currentPanelLayoutRowCell',
-                        'g' + currentPanel['group'] + '_o' + currentPanel['order_in_group'],
-                        // globalOffsetColTarget[varPanelsRowPanel],
-                        localOffsetColTarget,
-                        '|',
-                        'row'+varLocalRow,
-                        'col'+varLocalCol,
-                        currentPanelLayoutRowCell,
-                        ' > ',
-                        original[varLocalRow][localOffsetColTarget]
-                    );
-                    if(typeof flattenedPanelMapping[varLocalRow] === 'undefined') {
-                        flattenedPanelMapping[varLocalRow] = {};
-                    }
-                    flattenedPanelMapping[varLocalRow][localOffsetColTarget] =
-                        'g' + currentPanel['group'] + '_o' + currentPanel['order_in_group'] + ' ' +
-                        varLocalRow + '_' +
-                        currentPanelLayoutRowCell + ' ' +
-                        original[varLocalRow][localOffsetColTarget];
-
 
 
                     if (!ledGroupValues[currentPanel['group']]) {
@@ -85,16 +70,15 @@
                     if (!ledGroupValues[currentPanel['group']][currentPanel['order_in_group']]) {
                         ledGroupValues[currentPanel['group']][currentPanel['order_in_group']] = {};
                     }
-                    ledGroupValues[currentPanel['group']][currentPanel['order_in_group']][currentPanelLayoutRowCell] = original[varLocalRow][localOffsetColTarget];
+                    ledGroupValues[currentPanel['group']][currentPanel['order_in_group']][currentPanelLayoutRowCell] = original[localOffsetRowTarget][localOffsetColTarget];
                 }
             }
 
             globalOffsetColTarget[varPanelsRowPanel+1] = globalOffsetColTarget[varPanelsRowPanel] + currentPanelLayout[0].length;
         }
+
+        globalOffsetRowTarget[varPanelsRow+1] = globalOffsetRowTarget[varPanelsRow] + currentPanelsRowHeight;
     }
 
-    console.log(flattenedPanelMapping);
     console.log(ledGroupValues);
-
-
 </script>
