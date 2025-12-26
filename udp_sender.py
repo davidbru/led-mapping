@@ -26,75 +26,40 @@ GPIO_TO_DEBUG = 2
 last_execution_time = 0
 MIN_FRAME_INTERVAL = 1.0 / 24.0  # 24 FPS = ~0.0417 seconds between frames
 
-MAP_DEFINITIONS = {
-    '1x2': {
-        'width': 1,
-        'height': 2,
-        'mapping': [
-            0,
-            1
-        ]
-    },
-    '2x2': {
-        'width': 2,
-        'height': 2,
-        'mapping': [
-            0, 1,
-            3, 2
-        ]
-    },
-    '3x2': {
-        'width': 3,
-        'height': 2,
-        'mapping': [
-            0, 1, 2,
-            5, 4, 3
-        ]
-    },
-    '4x3': {
-        'width': 4,
-        'height': 3,
-        'mapping': [
-            0, 1, 2, 3,
-            7, 6, 5, 4,
-            8, 9, 10, 11
-        ]
-    },
-    '20x10': {
-        'width': 20,
-        'height': 10,
-        'mapping': [
-              0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,  15,  16,  17,  18,  19,
-             39,  38,  37,  36,  35,  34,  33,  32,  31,  30,  29,  28,  27,  26,  25,  24,  23,  22,  21,  20,
-             40,  41,  42,  43,  44,  45,  46,  47,  48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,
-             79,  78,  77,  76,  75,  74,  73,  72,  71,  70,  69,  68,  67,  66,  65,  64,  63,  62,  61,  60,
-             80,  81,  82,  83,  84,  85,  86,  87,  88,  89,  90,  91,  92,  93,  94,  95,  96,  97,  98,  99,
-            119, 118, 117, 116, 115, 114, 113, 112, 111, 110, 109, 108, 107, 106, 105, 104, 103, 102, 101, 100,
-            120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139,
-            159, 158, 157, 156, 155, 154, 153, 152, 151, 150, 149, 148, 147, 146, 145, 144, 143, 142, 141, 140,
-            160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179,
-            199, 198, 197, 196, 195, 194, 193, 192, 191, 190, 189, 188, 187, 186, 185, 184, 183, 182, 181, 180
-        ]
-    }
+# ----------------------------------
+# Your new panel layout definitions
+# ----------------------------------
+PANEL_DEFINITIONS = {
+    '2x2_top_left': [
+        [0, 1],
+        [3, 2]
+    ],
+    '2x2_bottom_right': [
+        [2, 3],
+        [1, 0]
+    ],
+    '2x3_top_left': [
+        [0, 1],
+        [5, 2],
+        [4, 3]
+    ],
+    '2x3_bottom_left': [
+        [4, 3],
+        [5, 2],
+        [0, 1]
+    ],
 }
 
-# if
-# 'gpio': None
-# the panel is not sent to the teensy
-SORT = [
-    {
-        'panels': [
-#             {'layout': '4x3', 'gpio': 2},
-            {'layout': '2x2', 'gpio': 2},
-            {'layout': '3x2', 'gpio': 3}
-        ]
-    },
-    {
-        'panels': [
-            {'layout': '3x2', 'gpio': None},
-            {'layout': '2x2', 'gpio': 5}
-        ]
-    },
+# MAPPING_DEFINITIONS grid of panels
+MAPPING_DEFINITIONS = [
+    [
+        {'used_panel': '2x2_top_left',    'gpioPin': 2, 'orderInGpioPinGroup': 2},
+        {'used_panel': '2x2_bottom_right', 'gpioPin': 3, 'orderInGpioPinGroup': 2},
+    ],
+#     [
+#         {'used_panel': '2x2_bottom_right','gpioPin': 2, 'orderInGpioPinGroup': 3},
+#         {'used_panel': '2x2_top_left',    'gpioPin': 3, 'orderInGpioPinGroup': 1},
+#     ]
 ]
 
 gpio_to_indices = {}
@@ -103,74 +68,79 @@ gpio_to_indices = {}
 # ---------------- #
 # HELPER FUNCTIONS #
 # ---------------- #
-def calculate_panel_properties(panel, definition, global_offset):
-    panel['global_offset'] = global_offset
-    panel['width'] = definition['width']
-    panel['height'] = definition['height']
-    panel['mapping_raw'] = definition['mapping']
-    return global_offset + definition['width'] * definition['height']
-
-def validate_row_heights(SORT):
-    for row_index, row in enumerate(SORT):
-        if not row['all_panel_rows_are_equal_height']:
-            raise ValueError(f"Row {row_index} has panels of unequal height. Aborting.")
-
-def validate_row_widths(SORT):
-    row_widths = [row['panel_row_width'] for row in SORT]
-    if len(set(row_widths)) != 1:
-        raise ValueError(f"Panel rows have different widths: {row_widths}")
-
 def basic_panel_preparation():
-    global MAP_DEFINITIONS
-    global SORT
+    """
+    Build gpio_to_indices using the new PANEL_DEFINITIONS + MAPPING_DEFINITIONS logic.
+    Includes consistency checks for row widths and heights.
+    """
+
     global gpio_to_indices
+    gpio_to_indices = {}
 
-    gpio_to_indices = {}  # Initialize or clear the dictionary
+    # ----------------------------------
+    # Precompute row widths and heights for consistency checks
+    # ----------------------------------
+    row_widths = []
+    row_heights = []
 
-    # Add area key to MAP_DEFINITIONS
-    for definition in MAP_DEFINITIONS.values():
-        definition['area'] = definition['width'] * definition['height']
+    for row_index, panel_row in enumerate(MAPPING_DEFINITIONS):
+        width = sum(len(PANEL_DEFINITIONS[p['used_panel']][0]) for p in panel_row)
+        heights = [len(PANEL_DEFINITIONS[p['used_panel']]) for p in panel_row]
 
-    global_offset = 0
-    for row in SORT:
-        row['panel_row_width'] = 0
-        heights = set()
+        if len(set(heights)) != 1:
+            raise ValueError(f"Row {row_index} has panels of unequal height: {heights}")
 
-        # Step 1: Prepare panels and calculate sizes
-        for panel in row['panels']:
-            definition = MAP_DEFINITIONS[panel['layout']]
-            global_offset = calculate_panel_properties(panel, definition, global_offset)
-            row['panel_row_width'] += definition['width']
-            heights.add(definition['height'])
+        row_widths.append(width)
+        row_heights.append(heights[0])
 
-        row['panel_row_height'] = max(heights)
-        row['all_panel_rows_are_equal_height'] = len(heights) == 1
+    if len(set(row_widths)) != 1:
+        raise ValueError(f"Panel rows have different total widths: {row_widths}")
 
-        # Step 2: Precompute static index mappings for each panel
-        row_offset = row['panels'][0]['global_offset']
-        panel_row_width = row['panel_row_width']
-        panel_row_height = row['panel_row_height']
+    # ----------------------------------
+    # Compute LED entries (gpio, order, cellIndex, globalPixelIndex)
+    # ----------------------------------
+    led_entries = []
 
-        current_x = 0
-        for panel in row['panels']:
-            w, h = panel['width'], panel['height']
-            panel_indices = []
+    full_width = row_widths[0]  # All rows have same width after consistency check
 
-            for i in panel['mapping_raw']:
-                y = i // w
-                x = i % w
-                absolute_index = (y * panel_row_width) + (current_x + x)
-                panel_indices.append(row_offset + absolute_index)
+    row_offset_pixels = 0
+    for panel_row in MAPPING_DEFINITIONS:
+        max_height = max(len(PANEL_DEFINITIONS[p['used_panel']]) for p in panel_row)
+        col_offset_pixels = 0
 
-            # ⬅️ Skip disabled panels
-            if panel['gpio'] is not None:
-                gpio_to_indices[panel['gpio']] = panel_indices
-            current_x += w
+        for panel in panel_row:
+            layout = PANEL_DEFINITIONS[panel['used_panel']]
+            gpio = panel['gpioPin']
+            order = panel['orderInGpioPinGroup']
 
-    # Check consistency
-    validate_row_widths(SORT)
-    validate_row_heights(SORT)
+            panel_height = len(layout)
+            panel_width  = len(layout[0])
 
+            for r, layout_row in enumerate(layout):
+                for c, cell_index in enumerate(layout_row):
+                    global_pixel_index = (row_offset_pixels + r) * full_width + (col_offset_pixels + c)
+                    led_entries.append((gpio, order, cell_index, global_pixel_index))
+
+            col_offset_pixels += panel_width
+
+        row_offset_pixels += max_height
+
+    # ----------------------------------
+    # Sort by GPIO → group order → cell index
+    # ----------------------------------
+    led_entries.sort(key=lambda x: (x[0], x[1], x[2]))
+
+    # ----------------------------------
+    # Build gpio_to_indices = {gpio : [globalPixelIndex, ...]}
+    # ----------------------------------
+    for gpio, _, _, idx in led_entries:
+        if gpio is None:
+            continue
+        gpio_to_indices.setdefault(gpio, []).append(idx)
+
+    if DEBUG and GPIO_TO_DEBUG == gpio:
+        for gpio, indices in gpio_to_indices.items():
+            print(f"GPIO {gpio} indices: {indices}")
 
 
 # --------------------------------------- #
