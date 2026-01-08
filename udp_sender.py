@@ -21,14 +21,14 @@ import struct  # Only needed for byte-packing
 # VARIABLE AND CONSTANT DEFINITIONS #
 # --------------------------------- #
 DEBUG = True
-GPIO_TO_DEBUG = 2
+STRIP_TO_DEBUG = 2
 
 last_execution_time = 0
 MIN_FRAME_INTERVAL = 1.0 / 24.0  # 24 FPS = ~0.0417 seconds between frames
 
-# ----------------------------------
-# Your new panel layout definitions
-# ----------------------------------
+# ------------------------ #
+# PANEL DEFINITIONS
+# ------------------------ #
 PANEL_DEFINITIONS = {
     '2x2_top_left': [
         [0, 1],
@@ -48,21 +48,33 @@ PANEL_DEFINITIONS = {
         [5, 2],
         [0, 1]
     ],
+    '20x10_top_left': [
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+        [199, 198, 197, 196, 195, 194, 193, 192, 191, 190, 189, 188, 187, 186, 185, 184, 183, 182, 181, 20],
+        [162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 21],
+        [161, 160, 159, 158, 157, 156, 155, 154, 153, 152, 151, 150, 149, 148, 147, 146, 145, 144, 143, 22],
+        [124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 23],
+        [123, 122, 121, 120, 119, 118, 117, 116, 115, 114, 113, 112, 111, 110, 109, 108, 107, 106, 105, 24],
+        [86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 25],
+        [85, 84, 83, 82, 81, 80, 79, 78, 77, 76, 75, 74, 73, 72, 71, 70, 69, 68, 67, 26],
+        [48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 27],
+        [47, 46, 45, 44, 43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 30, 29, 28]
+    ],
 }
 
-# MAPPING_DEFINITIONS grid of panels
+# ------------------------ #
+# MAPPING DEFINITIONS (strip assignment)
+# ------------------------ #
 MAPPING_DEFINITIONS = [
     [
-        {'used_panel': '2x2_top_left',    'gpioPin': 2, 'orderInGpioPinGroup': 2},
-        {'used_panel': '2x2_bottom_right', 'gpioPin': 3, 'orderInGpioPinGroup': 2},
+        {'used_panel': '20x10_top_left', 'strip': 3, 'orderInStripGroup': 1}
     ],
-#     [
-#         {'used_panel': '2x2_bottom_right','gpioPin': 2, 'orderInGpioPinGroup': 3},
-#         {'used_panel': '2x2_top_left',    'gpioPin': 3, 'orderInGpioPinGroup': 1},
-#     ]
+    [
+        {'used_panel': '20x10_top_left', 'strip': 2, 'orderInStripGroup': 1}
+    ],
 ]
 
-gpio_to_indices = {}
+strip_to_indices = {}
 
 
 # ---------------- #
@@ -70,12 +82,11 @@ gpio_to_indices = {}
 # ---------------- #
 def basic_panel_preparation():
     """
-    Build gpio_to_indices using the new PANEL_DEFINITIONS + MAPPING_DEFINITIONS logic.
-    Includes consistency checks for row widths and heights.
+    Builds strip_to_indices from PANEL_DEFINITIONS + MAPPING_DEFINITIONS
     """
 
-    global gpio_to_indices
-    gpio_to_indices = {}
+    global strip_to_indices
+    strip_to_indices = {}
 
     # ----------------------------------
     # Precompute row widths and heights for consistency checks
@@ -96,9 +107,7 @@ def basic_panel_preparation():
     if len(set(row_widths)) != 1:
         raise ValueError(f"Panel rows have different total widths: {row_widths}")
 
-    # ----------------------------------
-    # Compute LED entries (gpio, order, cellIndex, globalPixelIndex)
-    # ----------------------------------
+    # Build led_entries = (strip, order, cellIndex, globalPixelIndex)
     led_entries = []
 
     full_width = row_widths[0]  # All rows have same width after consistency check
@@ -110,8 +119,8 @@ def basic_panel_preparation():
 
         for panel in panel_row:
             layout = PANEL_DEFINITIONS[panel['used_panel']]
-            gpio = panel['gpioPin']
-            order = panel['orderInGpioPinGroup']
+            strip = panel['strip']
+            order = panel['orderInStripGroup']
 
             panel_height = len(layout)
             panel_width  = len(layout[0])
@@ -119,33 +128,28 @@ def basic_panel_preparation():
             for r, layout_row in enumerate(layout):
                 for c, cell_index in enumerate(layout_row):
                     global_pixel_index = (row_offset_pixels + r) * full_width + (col_offset_pixels + c)
-                    led_entries.append((gpio, order, cell_index, global_pixel_index))
+                    led_entries.append((strip, order, cell_index, global_pixel_index))
 
             col_offset_pixels += panel_width
 
         row_offset_pixels += max_height
 
-    # ----------------------------------
-    # Sort by GPIO → group order → cell index
-    # ----------------------------------
+    # Sort by strip → group order → cell index
     led_entries.sort(key=lambda x: (x[0], x[1], x[2]))
 
-    # ----------------------------------
-    # Build gpio_to_indices = {gpio : [globalPixelIndex, ...]}
-    # ----------------------------------
-    for gpio, _, _, idx in led_entries:
-        if gpio is None:
+    # Build strip_to_indices
+    for strip, _, _, idx in led_entries:
+        if strip is None:
             continue
-        gpio_to_indices.setdefault(gpio, []).append(idx)
+        strip_to_indices.setdefault(strip, []).append(idx)
 
-    if DEBUG and GPIO_TO_DEBUG == gpio:
-        for gpio, indices in gpio_to_indices.items():
-            print(f"GPIO {gpio} indices: {indices}")
+    # Debug print first strip
+    if DEBUG and STRIP_TO_DEBUG in strip_to_indices:
+        print(f"Strip {STRIP_TO_DEBUG} indices: {strip_to_indices[STRIP_TO_DEBUG]}")
 
-
-# --------------------------------------- #
-# TouchDesigner DAT execute DAT functions #
-# --------------------------------------- #
+# ------------------------ #
+# DAT EXECUTE FUNCTIONS
+# ------------------------ #
 def tableChange(dat):
 #     op('text1').clear()
 #     op('text1').write('You changed DAT: \n' +str(dat))
@@ -161,7 +165,7 @@ def colChange(dat, cols):
 
 
 def cellChange(dat, cells, prev):
-    global gpio_to_indices
+    global strip_to_indices
     global last_execution_time
     
     # Throttle execution to 24 FPS
@@ -173,7 +177,7 @@ def cellChange(dat, cells, prev):
 
     op('text1').clear()
 
-    # Step 1: Parse DAT into list of RGB tuples using dat[i, col]
+    # parse RGB values from DAT
     raw_rgb_tuples = []
     for i in range(dat.numRows):
         try:
@@ -185,42 +189,35 @@ def cellChange(dat, cells, prev):
             op('text1').write(f"❌ Invalid RGB at row {i}: {dat[i, 0].val}, {dat[i, 1].val}, {dat[i, 2].val}")
             return
 
-    # Step 2: Send one binary packet per GPIO using precomputed indices
-    for gpio, indices in gpio_to_indices.items():
+    # send UDP per strip
+    for strip, indices in strip_to_indices.items():
         byte_array = bytearray()
-        byte_array.append(gpio)  # 1-byte header: GPIO number
+        byte_array.append(strip)  # first byte = strip index
         try:
             for i in indices:
                 r, g, b = raw_rgb_tuples[i]
                 byte_array += struct.pack('BBB', r, g, b)
         except IndexError:
-            op('text1').write(f"❌ IndexError: One of the RGB indices for GPIO {gpio} is out of range.")
+            op('text1').write(f"❌ IndexError for strip {strip}")
             continue
 
-        if len(byte_array) > 1450:
-            op('text1').write(f"⚠️ GPIO {gpio} packet too large: {len(byte_array)} bytes")
-        else:
-            # Skip the first byte (the GPIO header)
+        # debug print first 5 pixels
+        if DEBUG and strip == STRIP_TO_DEBUG:
+            readable_lines = []
             rgb_payload = byte_array[1:]
             rgb_list = list(struct.iter_unpack('BBB', rgb_payload))
+            for i, (r, g, b) in enumerate(rgb_list[:5]):
+                hexval = f"#{r:02X}{g:02X}{b:02X}"
+                readable_lines.append(f"{i:3}: R={r:3} G={g:3} B={b:3} HEX={hexval}")
+            readable = "\n".join(readable_lines)
+            op('text1').write(f"Strip {strip} RGB data (first 5):\n{readable}\n")
 
-            if DEBUG and GPIO_TO_DEBUG == gpio:
-                readable_lines = []
-                for i, (r, g, b) in enumerate(rgb_list):
-                    hexval = f"#{r:02X}{g:02X}{b:02X}"
-                    readable_lines.append(
-                        f"{i:3}: R={r:3} G={g:3} B={b:3}  HEX={hexval}"
-                    )
-
-                readable = "\n".join(readable_lines)
-
-                op('text1').write(f"GPIO {gpio} RGB data:\n{readable}\n")
-
-            op('udpout1').sendBytes(byte_array)
-
+        op('udpout1').sendBytes(byte_array)
 
 def sizeChange(dat):
     return
 
-
+# ------------------------ #
+# INITIALIZATION
+# ------------------------ #
 basic_panel_preparation()
