@@ -36,10 +36,8 @@ MAPPING_DEFINITIONS = [
     ],
 ]
 
-def build_strip_to_indices(debug=True, strip_to_debug=1):
-    """Build strip_to_indices from PANEL_DEFINITIONS + MAPPING_DEFINITIONS"""
-    strip_to_indices = {}
-
+def build_strip_to_indices(debug=True):
+    """Build flattened indices from PANEL_DEFINITIONS + MAPPING_DEFINITIONS"""
     # Precompute row widths/heights
     row_widths = []
     
@@ -84,14 +82,13 @@ def build_strip_to_indices(debug=True, strip_to_debug=1):
     # Sort by strip → order → cell index
     led_entries.sort(key=lambda x: (x[0], x[1], x[2]))
 
-    # Build strip_to_indices
-    for strip, _, _, idx in led_entries:
-        strip_to_indices.setdefault(strip, []).append(idx)
+    # Build flattened indices
+    flattened_indices = [idx for _, _, _, idx in led_entries]
 
     # Debug
-    if debug and strip_to_debug in strip_to_indices:
-        print(f"Strip {strip_to_debug} indices: {strip_to_indices[strip_to_debug]}")
+    if debug:
+        print(f"Flattened indices (total {len(flattened_indices)}): {flattened_indices}")
 
-    return strip_to_indices
+    return flattened_indices
 
 build_strip_to_indices()
