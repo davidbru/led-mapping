@@ -1,27 +1,10 @@
-# copy the content of this script into the touchdesigner file > "datexec1"
-# it only sends debug output if it receives new pixel data
-# --> static image = no (new) debug infos
-
-# me is this DAT.
-#
-# dat is the changed DAT.
-# rows is a list of row indices.
-# cols is a list of column indices.
-# cells is the list of cells that have changed content.
-# prev is the list of previous string contents of the changed cells.
-#
-# Make sure the corresponding toggle is enabled in the DAT Execute DAT.
-#
-# If rows or columns are deleted, sizeChange will be called instead of row/col/cellChange.
-
 import struct  # Only needed for byte-packing
-
 
 # --------------------------------- #
 # VARIABLE AND CONSTANT DEFINITIONS #
 # --------------------------------- #
 DEBUG = True
-STRIP_TO_DEBUG = 2
+STRIP_TO_DEBUG = 0
 
 last_execution_time = 0
 MIN_FRAME_INTERVAL = 1.0 / 24.0  # 24 FPS = ~0.0417 seconds between frames
@@ -67,30 +50,24 @@ PANEL_DEFINITIONS = {
 # ------------------------ #
 MAPPING_DEFINITIONS = [
     [
-        {'used_panel': '20x10_top_left', 'strip': 3, 'orderInStripGroup': 1}
+        {'used_panel': '20x10_top_left', 'strip': 1, 'orderInStripGroup': 1}
     ],
     [
-        {'used_panel': '20x10_top_left', 'strip': 2, 'orderInStripGroup': 1}
+        {'used_panel': '20x10_top_left', 'strip': 0, 'orderInStripGroup': 1}
     ],
 ]
 
 strip_to_indices = {}
 
-
 # ---------------- #
 # HELPER FUNCTIONS #
 # ---------------- #
 def basic_panel_preparation():
-    """
-    Builds strip_to_indices from PANEL_DEFINITIONS + MAPPING_DEFINITIONS
-    """
-
+    """Build strip_to_indices from PANEL_DEFINITIONS + MAPPING_DEFINITIONS"""
     global strip_to_indices
     strip_to_indices = {}
 
-    # ----------------------------------
-    # Precompute row widths and heights for consistency checks
-    # ----------------------------------
+    # Precompute row widths/heights
     row_widths = []
     row_heights = []
 
@@ -110,7 +87,7 @@ def basic_panel_preparation():
     # Build led_entries = (strip, order, cellIndex, globalPixelIndex)
     led_entries = []
 
-    full_width = row_widths[0]  # All rows have same width after consistency check
+    full_width = row_widths[0]
 
     row_offset_pixels = 0
     for panel_row in MAPPING_DEFINITIONS:
@@ -122,19 +99,15 @@ def basic_panel_preparation():
             strip = panel['strip']
             order = panel['orderInStripGroup']
 
-            panel_height = len(layout)
-            panel_width  = len(layout[0])
-
             for r, layout_row in enumerate(layout):
                 for c, cell_index in enumerate(layout_row):
                     global_pixel_index = (row_offset_pixels + r) * full_width + (col_offset_pixels + c)
                     led_entries.append((strip, order, cell_index, global_pixel_index))
 
-            col_offset_pixels += panel_width
-
+            col_offset_pixels += len(layout[0])
         row_offset_pixels += max_height
 
-    # Sort by strip → group order → cell index
+    # Sort by strip → order → cell index
     led_entries.sort(key=lambda x: (x[0], x[1], x[2]))
 
     # Build strip_to_indices
@@ -143,36 +116,22 @@ def basic_panel_preparation():
             continue
         strip_to_indices.setdefault(strip, []).append(idx)
 
-    # Debug print first strip
+    # Debug
     if DEBUG and STRIP_TO_DEBUG in strip_to_indices:
         print(f"Strip {STRIP_TO_DEBUG} indices: {strip_to_indices[STRIP_TO_DEBUG]}")
 
 # ------------------------ #
-# DAT EXECUTE FUNCTIONS
+# SEND FUNCTION
 # ------------------------ #
-def tableChange(dat):
-#     op('text1').clear()
-#     op('text1').write('You changed DAT: \n' +str(dat))
-    return
+def send_strips(dat):
+    """Send UDP packets for all strips from the current DAT table"""
 
-
-def rowChange(dat, rows):
-    return
-
-
-def colChange(dat, cols):
-    return
-
-
-def cellChange(dat, cells, prev):
-    global strip_to_indices
     global last_execution_time
-    
+
     # Throttle execution to 24 FPS
     current_time = absTime.seconds
     if current_time - last_execution_time < MIN_FRAME_INTERVAL:
-        return  # Skip this execution
-    
+        return
     last_execution_time = current_time
 
     op('text1').clear()
@@ -213,6 +172,22 @@ def cellChange(dat, cells, prev):
             op('text1').write(f"Strip {strip} RGB data (first 5):\n{readable}\n")
 
         op('udpout1').sendBytes(byte_array)
+
+# ------------------------ #
+# DAT EXECUTE FUNCTIONS
+# ------------------------ #
+def tableChange(dat):
+    send_strips(dat)  # only update once per table change
+    return
+
+def rowChange(dat, rows):
+    return
+
+def colChange(dat, cols):
+    return
+
+def cellChange(dat, cells, prev):
+    return  # ignore per-cell updates for performance
 
 def sizeChange(dat):
     return
