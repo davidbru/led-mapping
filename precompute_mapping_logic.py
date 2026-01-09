@@ -70,8 +70,10 @@ def build_strip_to_indices(debug=True):
 
             for r, layout_row in enumerate(layout):
                 for c, cell_index in enumerate(layout_row):
-                    global_pixel_index = (row_offset_pixels + r) * full_width + (col_offset_pixels + c)
-                    led_entries.append((strip, order, cell_index, global_pixel_index))
+                    x = col_offset_pixels + c
+                    y = row_offset_pixels + r
+                    global_pixel_index = y * full_width + x
+                    led_entries.append((strip, order, cell_index, global_pixel_index, x, y))
 
             col_offset_pixels += len(layout[0])
         row_offset_pixels += max_height
@@ -82,13 +84,15 @@ def build_strip_to_indices(debug=True):
     # Sort by strip → order → cell index
     led_entries.sort(key=lambda x: (x[0], x[1], x[2]))
 
-    # Build flattened indices
-    flattened_indices = [idx for _, _, _, idx in led_entries]
+    # Build flattened indices and coordinates
+    flattened_indices = [e[3] for e in led_entries]
+    coords = [(e[4], e[5]) for e in led_entries]
 
     # Debug
     if debug:
         print(f"Flattened indices (total {len(flattened_indices)}): {flattened_indices}")
+        print(f"Coordinates (total {len(coords)}): {coords}")
 
-    return flattened_indices
+    return flattened_indices, coords
 
 build_strip_to_indices()
