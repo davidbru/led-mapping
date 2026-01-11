@@ -4,17 +4,21 @@
 #include <NativeEthernetUdp.h>
 
 // ================= CONFIG =================
+// 20x20 grid made of 2 panels (each 20x10)
+// Panel 1: Orange cable (Output 1 / Pin 2)
+// Panel 2: Blue cable (Output 2 / Pin 14)
 #define PANEL_WIDTH      20
 #define PANEL_HEIGHT     10
 #define PANEL_PIXELS     (PANEL_WIDTH * PANEL_HEIGHT)
 
-#define NUM_PANELS       21
-#define PANELS_PER_GROUP 3
-#define NUM_OUTPUTS      7
+#define NUM_PANELS       2
+#define PANELS_PER_GROUP 1
+#define NUM_OUTPUTS      2
 
-#define LEDS_PER_OUTPUT  (PANEL_PIXELS * PANELS_PER_GROUP) // 600
+#define LEDS_PER_OUTPUT  200 
 #define TOTAL_LEDS       (NUM_PANELS * PANEL_PIXELS)
-#define DMX_CHANNELS     (TOTAL_LEDS * 3)
+#define MAX_UNIVERSES    ((TOTAL_LEDS / 170) + 1)
+#define DMX_CHANNELS     (MAX_UNIVERSES * 512)
 
 // ================= OCTO =================
 DMAMEM int displayMemory[LEDS_PER_OUTPUT * 8];
@@ -32,7 +36,7 @@ byte mac[] = { 0x04, 0xE9, 0xE5, 0x00, 0x00, 0x01 };
 
 // ================= ARTNET RECEIVER =================
 ArtnetNativeEther artnet;
-uint8_t dmxBuffer[DMX_CHANNELS]; // flatten buffer for all universes
+uint8_t dmxBuffer[DMX_CHANNELS]; 
 
 // ================= PANEL ORIENTATION =================
 enum Orientation {
@@ -43,21 +47,14 @@ enum Orientation {
 };
 
 Orientation panelOrientation[NUM_PANELS] = {
-  TOP_RIGHT, TOP_LEFT, TOP_LEFT, TOP_RIGHT, TOP_LEFT,
-  BOTTOM_RIGHT, BOTTOM_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT,
-  TOP_LEFT, TOP_RIGHT, TOP_LEFT, TOP_LEFT, TOP_RIGHT,
-  BOTTOM_RIGHT, BOTTOM_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT,
-  BOTTOM_RIGHT, BOTTOM_LEFT, BOTTOM_LEFT
+  TOP_LEFT, TOP_LEFT
 };
 
+// Note: If Panel 2 is on a different output (e.g. Jack 2 Orange which is Output 5), 
+// change NUM_OUTPUTS to 5 and update panelGroups to {{1}, {0}, {0}, {0}, {2}}
 const uint8_t panelGroups[NUM_OUTPUTS][PANELS_PER_GROUP] = {
-  {2, 1, 6},
-  {3, 8, 7},
-  {5, 4, 9},
-  {10, 14, 18},
-  {12, 11, 15},
-  {13, 17, 16},
-  {19, 20, 21}
+  {1}, // Output 1
+  {2}  // Output 2
 };
 
 // ================= PANEL LUT =================
@@ -90,12 +87,11 @@ void handleArtDmx(const uint8_t *data, uint16_t size,
                   const ArtDmxMetadata &metadata,
                   const ArtNetRemoteInfo &remote)
 {
-  // Each DMX frame contains up to 512 channels
-  uint16_t uni  = metadata.universe;
+  uint16_t uni = metadata.universe;
   uint32_t base = uni * 512U;
-  if (base >= DMX_CHANNELS) return;
-  uint16_t len = min((uint16_t)(DMX_CHANNELS - base), size);
-  memcpy(dmxBuffer + base, data, len);
+  
+  if (base + size > DMX_CHANNELS) return;
+  memcpy(dmxBuffer + base, data, size);
 }
 
 void setup() {
@@ -103,12 +99,13 @@ void setup() {
   delay(500);
 
   Serial.println("Ethernet starting (DHCP)...");
-  Ethernet.begin(mac);
+  if (Ethernet.begin(mac) == 0) {
+    Serial.println("Failed to configure Ethernet using DHCP");
+  }
 
   Serial.print("IP address: ");
   Serial.println(Ethernet.localIP());
 
-  // Subscribe to ALL DMX universes
   artnet.begin();
   artnet.subscribeArtDmx([](const uint8_t *data, uint16_t size,
                              const ArtDmxMetadata &metadata,
@@ -118,12 +115,10 @@ void setup() {
 
   leds.begin();
   leds.show();
-
   Serial.println("Ready!");
 }
 
 void loop() {
-  // Must call parse() to check for incoming Art-Net packets
   artnet.parse();
 
   // Convert DMX buffer to LED output
@@ -140,7 +135,10 @@ void loop() {
           uint16_t physical = panelLUT[logical];
           uint32_t ledIndex = panelBase + physical;
 
-          uint32_t dmxIndex = globalPixel * 3U;
+          uint32_t currentUniverse = globalPixel / 170;
+          uint32_t pixelInUniverse = globalPixel % 170;
+          uint32_t dmxIndex = (currentUniverse * 512) + (pixelInUniverse * 3);
+
           uint8_t r = dmxBuffer[dmxIndex + 0];
           uint8_t g = dmxBuffer[dmxIndex + 1];
           uint8_t b = dmxBuffer[dmxIndex + 2];
