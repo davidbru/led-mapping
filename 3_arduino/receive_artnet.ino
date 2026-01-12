@@ -4,18 +4,17 @@
 #include <NativeEthernetUdp.h>
 
 // ================= CONFIG =================
-// 20x20 grid made of 2 panels (each 20x10)
-// Panel 1: Orange cable (Output 1 / Pin 2)
-// Panel 2: Blue cable (Output 2 / Pin 14)
+// 21 panels (each 20x10) grouped into 7 LED groups (A-G)
+// Each group has 3 panels connected in series to one OctoWS2811 output.
 #define PANEL_WIDTH      20
 #define PANEL_HEIGHT     10
 #define PANEL_PIXELS     (PANEL_WIDTH * PANEL_HEIGHT)
 
-#define NUM_PANELS       2
-#define PANELS_PER_GROUP 1
-#define NUM_OUTPUTS      2
+#define NUM_PANELS       21
+#define PANELS_PER_GROUP 3
+#define NUM_OUTPUTS      7
 
-#define LEDS_PER_OUTPUT  200 
+#define LEDS_PER_OUTPUT  (PANELS_PER_GROUP * PANEL_PIXELS) 
 #define TOTAL_LEDS       (NUM_PANELS * PANEL_PIXELS)
 #define MAX_UNIVERSES    ((TOTAL_LEDS / 170) + 1)
 #define DMX_CHANNELS     (MAX_UNIVERSES * 512)
@@ -47,14 +46,37 @@ enum Orientation {
 };
 
 Orientation panelOrientation[NUM_PANELS] = {
-  TOP_LEFT, TOP_LEFT
+  TOP_RIGHT,    // 1
+  TOP_LEFT,     // 2
+  TOP_LEFT,     // 3
+  TOP_RIGHT,    // 4
+  TOP_LEFT,     // 5
+  BOTTOM_RIGHT, // 6
+  BOTTOM_RIGHT, // 7
+  BOTTOM_LEFT,  // 8
+  BOTTOM_RIGHT, // 9
+  TOP_LEFT,     // 10
+  TOP_RIGHT,    // 11
+  TOP_LEFT,     // 12
+  TOP_LEFT,     // 13
+  TOP_RIGHT,    // 14
+  BOTTOM_RIGHT, // 15
+  BOTTOM_RIGHT, // 16
+  BOTTOM_LEFT,  // 17
+  BOTTOM_RIGHT, // 18
+  BOTTOM_RIGHT, // 19
+  BOTTOM_LEFT,  // 20
+  BOTTOM_LEFT   // 21
 };
 
-// Note: If Panel 2 is on a different output (e.g. Jack 2 Orange which is Output 5), 
-// change NUM_OUTPUTS to 5 and update panelGroups to {{1}, {0}, {0}, {0}, {2}}
 const uint8_t panelGroups[NUM_OUTPUTS][PANELS_PER_GROUP] = {
-  {1}, // Output 1
-  {2}  // Output 2
+  {2, 1, 6},   // Group A
+  {3, 8, 7},   // Group B
+  {5, 4, 9},   // Group C
+  {10, 14, 18},// Group D
+  {12, 11, 15},// Group E
+  {13, 17, 16},// Group F
+  {19, 20, 21} // Group G
 };
 
 // ================= PANEL LUT =================
