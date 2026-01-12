@@ -19,6 +19,14 @@
 #define MAX_UNIVERSES    ((TOTAL_LEDS / 170) + 1)
 #define DMX_CHANNELS     (MAX_UNIVERSES * 512)
 
+// ================= BRIGHTNESS =================
+#define GLOBAL_BRIGHTNESS 255 // 0-255
+float panelBrightness[NUM_PANELS] = {
+  1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+  1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+  1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+}; // 0.0-1.0
+
 // ================= OCTO =================
 DMAMEM int displayMemory[LEDS_PER_OUTPUT * 8];
 int drawingMemory[LEDS_PER_OUTPUT * 8];
@@ -164,6 +172,12 @@ void loop() {
           uint8_t r = dmxBuffer[dmxIndex + 0];
           uint8_t g = dmxBuffer[dmxIndex + 1];
           uint8_t b = dmxBuffer[dmxIndex + 2];
+
+          // Apply brightness
+          float multiplier = panelBrightness[panelIdx] * (GLOBAL_BRIGHTNESS / 255.0);
+          r = (uint8_t)(r * multiplier);
+          g = (uint8_t)(g * multiplier);
+          b = (uint8_t)(b * multiplier);
 
           leds.setPixel(ledIndex, (r << 16) | (g << 8) | b);
           globalPixel++;
