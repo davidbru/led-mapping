@@ -124,28 +124,38 @@ uint32_t pixelLedIndex[TOTAL_LEDS];
 float pixelMultiplier[TOTAL_LEDS];
 
 void precomputeMapping() {
-  uint32_t globalPixel = 0;
+  // First, find where each panel is physically located on the Octo outputs
+  uint32_t panelLedBase[NUM_PANELS];
   for (uint8_t out = 0; out < NUM_OUTPUTS; out++) {
-    uint32_t outputBase = out * LEDS_PER_OUTPUT;
     for (uint8_t p = 0; p < PANELS_PER_GROUP; p++) {
-      uint8_t panelIdx = panelGroups[out][p] - 1;
-      Orientation o = panelOrientation[panelIdx];
-      uint32_t panelBase = outputBase + p * PANEL_PIXELS;
-      for (uint8_t y = 0; y < PANEL_HEIGHT; y++) {
-        for (uint8_t x = 0; x < PANEL_WIDTH; x++) {
-          uint16_t logical  = orientIndex(x, y, o);
-          uint16_t physical = panelLUT[logical];
-          
-          pixelLedIndex[globalPixel] = panelBase + physical;
-          
-          uint32_t currentUniverse = globalPixel / 170;
-          uint32_t pixelInUniverse = globalPixel % 170;
-          pixelDmxIndex[globalPixel] = (currentUniverse * 512) + (pixelInUniverse * 3);
-          
-          pixelMultiplier[globalPixel] = panelBrightness[panelIdx] * (GLOBAL_BRIGHTNESS / 255.0);
-          
-          globalPixel++;
-        }
+      uint8_t panelIdx = panelGroups[out][p] - 1; // 0-indexed
+      panelLedBase[panelIdx] = (out * LEDS_PER_OUTPUT) + (p * PANEL_PIXELS);
+    }
+  }
+
+  // Now, map panels 1 to 21 sequentially to Art-Net universes
+  // Panel 1 (index 0) = Universe 0, Channel 0
+  // Panel 2 (index 1) = next 600 channels, etc.
+  uint32_t globalPixel = 0;
+  for (uint8_t panelIdx = 0; panelIdx < NUM_PANELS; panelIdx++) {
+    Orientation o = panelOrientation[panelIdx];
+    uint32_t ledBase = panelLedBase[panelIdx];
+    
+    for (uint8_t y = 0; y < PANEL_HEIGHT; y++) {
+      for (uint8_t x = 0; x < PANEL_WIDTH; x++) {
+        uint16_t logical  = orientIndex(x, y, o);
+        uint16_t physical = panelLUT[logical];
+        
+        pixelLedIndex[globalPixel] = ledBase + physical;
+        
+        // This calculates the DMX address assuming panels 1, 2, 3... are sequential in the DMX stream
+        uint32_t currentUniverse = globalPixel / 170;
+        uint32_t pixelInUniverse = globalPixel % 170;
+        pixelDmxIndex[globalPixel] = (currentUniverse * 512) + (pixelInUniverse * 3);
+        
+        pixelMultiplier[globalPixel] = panelBrightness[panelIdx] * (GLOBAL_BRIGHTNESS / 255.0);
+        
+        globalPixel++;
       }
     }
   }
