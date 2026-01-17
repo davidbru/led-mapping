@@ -16,8 +16,18 @@
 
 #define LEDS_PER_OUTPUT  (PANELS_PER_GROUP * PANEL_PIXELS) 
 #define TOTAL_LEDS       (NUM_PANELS * PANEL_PIXELS)
-#define MAX_UNIVERSES    ((TOTAL_LEDS / 170) + 1)
+
+// 1 panel = 200 pixels = 600 channels.
+// Art-Net universe = 512 channels.
+// The Teensy expects 170 pixels per universe (510 channels).
+// 21 panels * 200 pixels = 4200 pixels.
+// 4200 / 170 = 24.7 -> 25 universes (0 to 24).
+
+#define MAX_UNIVERSES    32 // Increased for safety
 #define DMX_CHANNELS     (MAX_UNIVERSES * 512)
+
+// ================= SYNC =================
+#define LAST_UNIVERSE    (MAX_UNIVERSES - 1)
 
 // ================= BRIGHTNESS =================
 #define GLOBAL_BRIGHTNESS 64 // 0-255
@@ -40,10 +50,6 @@ OctoWS2811 leds(
 
 // ================= ETHERNET =================
 byte mac[] = { 0x04, 0xE9, 0xE5, 0x00, 0x00, 0x01 };
-
-// ================= ARTNET RECEIVER =================
-ArtnetNativeEther artnet;
-uint8_t dmxBuffer[DMX_CHANNELS];
 
 // ================= PANEL ORIENTATION =================
 enum Orientation {
@@ -112,16 +118,81 @@ inline uint16_t orientIndex(uint8_t x, uint8_t y, Orientation o) {
   return 0;
 }
 
+// ================= PRECOMPUTED MAPPING =================
+uint32_t pixelDmxIndex[TOTAL_LEDS];
+uint32_t pixelLedIndex[TOTAL_LEDS];
+float pixelMultiplier[TOTAL_LEDS];
+
+void precomputeMapping() {
+  uint32_t globalPixel = 0;
+  for (uint8_t out = 0; out < NUM_OUTPUTS; out++) {
+    uint32_t outputBase = out * LEDS_PER_OUTPUT;
+    for (uint8_t p = 0; p < PANELS_PER_GROUP; p++) {
+      uint8_t panelIdx = panelGroups[out][p] - 1;
+      Orientation o = panelOrientation[panelIdx];
+      uint32_t panelBase = outputBase + p * PANEL_PIXELS;
+      for (uint8_t y = 0; y < PANEL_HEIGHT; y++) {
+        for (uint8_t x = 0; x < PANEL_WIDTH; x++) {
+          uint16_t logical  = orientIndex(x, y, o);
+          uint16_t physical = panelLUT[logical];
+          
+          pixelLedIndex[globalPixel] = panelBase + physical;
+          
+          uint32_t currentUniverse = globalPixel / 170;
+          uint32_t pixelInUniverse = globalPixel % 170;
+          pixelDmxIndex[globalPixel] = (currentUniverse * 512) + (pixelInUniverse * 3);
+          
+          pixelMultiplier[globalPixel] = panelBrightness[panelIdx] * (GLOBAL_BRIGHTNESS / 255.0);
+          
+          globalPixel++;
+        }
+      }
+    }
+  }
+}
+
+// ================= ARTNET RECEIVER =================
+ArtnetNativeEther artnet;
+uint8_t dmxBuffer[DMX_CHANNELS];
+uint8_t dmxBufferBack[DMX_CHANNELS]; // Second buffer to prevent tearing
+volatile bool newFrame = false;
+volatile uint32_t universesSeen = 0;
+uint32_t lastUniverseReceived = 0;
+uint32_t maxUniverseSeen = 0;
+uint32_t totalPackets = 0;
+
 // ================= ARTDMX CALLBACK =================
 void handleArtDmx(const uint8_t *data, uint16_t size,
                   const ArtDmxMetadata &metadata,
                   const ArtNetRemoteInfo &remote)
 {
-  uint16_t uni = metadata.universe;
-  uint32_t base = uni * 512U;
+  // Calculate absolute universe: (Subnet * 16) + Universe
+  // Art-Net uses 4 bits for Universe and 4 bits for Subnet.
+  uint16_t absoluteUni = (metadata.subnet << 4) | metadata.universe;
   
-  if (base + size > DMX_CHANNELS) return;
-  memcpy(dmxBuffer + base, data, size);
+  lastUniverseReceived = absoluteUni;
+  totalPackets++;
+  if (absoluteUni > maxUniverseSeen) maxUniverseSeen = absoluteUni;
+  
+  if (absoluteUni >= MAX_UNIVERSES) return;
+
+  uint32_t base = absoluteUni * 512U;
+  memcpy(dmxBufferBack + base, data, size);
+  
+  static uint32_t universeMask = 0;
+  universeMask |= (1UL << absoluteUni);
+  universesSeen++;
+
+  // Flexible swap: 
+  // 1. We see the last expected absolute universe (24)
+  // 2. OR we see the current highest known universe
+  // 3. OR we've seen enough packets
+  if (absoluteUni == 24 || absoluteUni == maxUniverseSeen || universesSeen >= 25) {
+    memcpy(dmxBuffer, dmxBufferBack, DMX_CHANNELS);
+    newFrame = true;
+    universeMask = 0;
+    universesSeen = 0;
+  }
 }
 
 void setup() {
@@ -136,6 +207,10 @@ void setup() {
   Serial.print("IP address: ");
   Serial.println(Ethernet.localIP());
 
+  Serial.print("Listening for ");
+  Serial.print(MAX_UNIVERSES);
+  Serial.println(" universes.");
+
   artnet.begin();
   artnet.subscribeArtDmx([](const uint8_t *data, uint16_t size,
                              const ArtDmxMetadata &metadata,
@@ -144,6 +219,7 @@ void setup() {
   });
 
   leds.begin();
+  precomputeMapping();
   leds.show();
   Serial.println("Ready!");
 }
@@ -151,40 +227,55 @@ void setup() {
 void loop() {
   artnet.parse();
 
-  // Convert DMX buffer to LED output
-  uint32_t globalPixel = 0;
-  for (uint8_t out = 0; out < NUM_OUTPUTS; out++) {
-    uint32_t outputBase = out * LEDS_PER_OUTPUT;
-    for (uint8_t p = 0; p < PANELS_PER_GROUP; p++) {
-      uint8_t panelIdx = panelGroups[out][p] - 1;
-      Orientation o = panelOrientation[panelIdx];
-      uint32_t panelBase = outputBase + p * PANEL_PIXELS;
-      for (uint8_t y = 0; y < PANEL_HEIGHT; y++) {
-        for (uint8_t x = 0; x < PANEL_WIDTH; x++) {
-          uint16_t logical  = orientIndex(x, y, o);
-          uint16_t physical = panelLUT[logical];
-          uint32_t ledIndex = panelBase + physical;
+  static uint32_t lastStats = 0;
+  static uint32_t frameCount = 0;
+  static uint32_t lastShow = 0;
 
-          uint32_t currentUniverse = globalPixel / 170;
-          uint32_t pixelInUniverse = globalPixel % 170;
-          uint32_t dmxIndex = (currentUniverse * 512) + (pixelInUniverse * 3);
+  // Update LEDs if a frame is ready, or if it's been a while since the last update
+  // even if not all universes arrived (to keep the display alive).
+  // Throttle to 12fps (83.3ms) as requested.
+  uint32_t now = micros();
+  bool timeout = (now - lastShow > 100000); // 10fps fallback (100ms)
+  
+  if ((newFrame || timeout) && (now - lastShow > 83333)) {
+    newFrame = false;
+    frameCount++;
+    lastShow = now;
 
-          uint8_t r = dmxBuffer[dmxIndex + 0];
-          uint8_t g = dmxBuffer[dmxIndex + 1];
-          uint8_t b = dmxBuffer[dmxIndex + 2];
-
-          // Apply brightness
-          float multiplier = panelBrightness[panelIdx] * (GLOBAL_BRIGHTNESS / 255.0);
-          r = (uint8_t)(r * multiplier);
-          g = (uint8_t)(g * multiplier);
-          b = (uint8_t)(b * multiplier);
-
-          leds.setPixel(ledIndex, (r << 16) | (g << 8) | b);
-          globalPixel++;
-        }
-      }
+    // Optional: Print diagnostic info to serial once per second
+    if (timeout && (frameCount % 12 == 0)) {
+       Serial.println("Frame triggered by timeout (missing universes?)");
     }
+
+    // Wait if OctoWS2811 is still busy sending the previous frame
+    while (leds.busy()) { /* wait */ }
+
+    // Copy to drawing memory as fast as possible
+    for (uint32_t i = 0; i < TOTAL_LEDS; i++) {
+      uint32_t dmxIdx = pixelDmxIndex[i];
+      // Inline the brightness math to be as fast as possible
+      uint32_t r = (uint32_t)(dmxBuffer[dmxIdx + 0] * pixelMultiplier[i]);
+      uint32_t g = (uint32_t)(dmxBuffer[dmxIdx + 1] * pixelMultiplier[i]);
+      uint32_t b = (uint32_t)(dmxBuffer[dmxIdx + 2] * pixelMultiplier[i]);
+
+      leds.setPixel(pixelLedIndex[i], (r << 16) | (g << 8) | b);
+    }
+
+    leds.show();
   }
 
-  leds.show();
+  if (millis() - lastStats >= 1000) {
+    Serial.print("FPS: ");
+    Serial.print(frameCount);
+    Serial.print(" | LastUni: ");
+    Serial.print(lastUniverseReceived);
+    Serial.print(" | MaxUni: ");
+    Serial.print(maxUniverseSeen);
+    Serial.print(" | Pkts: ");
+    Serial.println(totalPackets);
+    
+    frameCount = 0;
+    totalPackets = 0;
+    lastStats = millis();
+  }
 }
