@@ -20,7 +20,7 @@
 #define DMX_CHANNELS     (MAX_UNIVERSES * 512)
 
 // ================= BRIGHTNESS =================
-#define GLOBAL_BRIGHTNESS 255 // 0-255
+#define GLOBAL_BRIGHTNESS 64 // 0-255
 float panelBrightness[NUM_PANELS] = {
   1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
   1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
@@ -43,7 +43,7 @@ byte mac[] = { 0x04, 0xE9, 0xE5, 0x00, 0x00, 0x01 };
 
 // ================= ARTNET RECEIVER =================
 ArtnetNativeEther artnet;
-uint8_t dmxBuffer[DMX_CHANNELS]; 
+uint8_t dmxBuffer[DMX_CHANNELS];
 
 // ================= PANEL ORIENTATION =================
 enum Orientation {
@@ -78,12 +78,12 @@ Orientation panelOrientation[NUM_PANELS] = {
 };
 
 const uint8_t panelGroups[NUM_OUTPUTS][PANELS_PER_GROUP] = {
-  {2, 1, 6},   // Group A
-  {3, 8, 7},   // Group B
-  {5, 4, 9},   // Group C
-  {10, 14, 18},// Group D
-  {12, 11, 15},// Group E
-  {13, 17, 16},// Group F
+  {5, 4, 9},   // Group A
+  {13, 17, 16},   // Group B
+  {10, 14, 18},   // Group C
+  {3, 8, 7},// Group D
+  {2, 1, 6},// Group E
+  {12, 11, 15},// Group F
   {19, 20, 21} // Group G
 };
 
