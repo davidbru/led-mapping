@@ -243,11 +243,11 @@ void loop() {
 
   // Update LEDs if a frame is ready, or if it's been a while since the last update
   // even if not all universes arrived (to keep the display alive).
-  // Throttle to 12fps (83.3ms) as requested.
+  // Throttle to 60fps max (16.6ms) to avoid blocking ethernet.
   uint32_t now = micros();
-  bool timeout = (now - lastShow > 100000); // 10fps fallback (100ms)
+  bool timeout = (now - lastShow > 50000); // 20fps fallback (50ms)
   
-  if ((newFrame || timeout) && (now - lastShow > 83333)) {
+  if ((newFrame || timeout) && (now - lastShow > 16666)) {
     newFrame = false;
     frameCount++;
     lastShow = now;
