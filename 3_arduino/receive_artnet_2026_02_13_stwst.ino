@@ -58,12 +58,12 @@ enum Orientation {
 };
 
 Orientation panelOrientation[NUM_PANELS] = {
-  BOTTOM_RIGHT, // 1
-  BOTTOM_LEFT,  // 2
-  BOTTOM_RIGHT, // 3
-  TOP_RIGHT,    // 4
-  TOP_LEFT,     // 5
-  TOP_LEFT      // 6
+  TOP_RIGHT,    // 1
+  TOP_LEFT,     // 2
+  TOP_LEFT,     // 3
+  BOTTOM_RIGHT, // 4
+  BOTTOM_LEFT,  // 5
+  BOTTOM_RIGHT  // 6
 };
 
 const uint8_t panelGroups[NUM_OUTPUTS][PANELS_PER_GROUP] = {
